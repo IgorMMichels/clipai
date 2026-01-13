@@ -15,7 +15,7 @@ services:
       - DEBUG=true
       - REDIS_URL=redis://redis:6379/0
     env_file:
-      - ./backend/.env
+      - ./backend/.env.local
     depends_on:
       - redis
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

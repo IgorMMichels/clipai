@@ -1,6 +1,6 @@
 """
 Transcription Service with Fallback
-Handles video transcription using available backends
+Handles video transcription using Faster-Whisper directly (most stable option)
 """
 import logging
 import subprocess
@@ -11,26 +11,16 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-# Try to import clipsai, but don't fail if not available
-CLIPSAI_AVAILABLE = False
-try:
-    from clipsai import Transcriber as ClipsAITranscriber
-    CLIPSAI_AVAILABLE = True
-    logger.info("ClipsAI Transcriber available")
-except ImportError as e:
-    logger.warning(f"ClipsAI not available: {e}. Using fallback transcription.")
-
-
 class TranscriptionService:
     """Service for transcribing video/audio files"""
     
     def __init__(self):
-        self._transcriber = None
+        pass
     
     @property
     def is_available(self) -> bool:
         """Check if any transcription method is available"""
-        return True  # We always have at least FFmpeg fallback
+        return True
     
     def transcribe(
         self, 
@@ -39,15 +29,7 @@ class TranscriptionService:
         batch_size: int = 16
     ) -> dict:
         """
-        Transcribe a video/audio file
-        
-        Args:
-            file_path: Path to the media file
-            language: ISO 639-1 language code (auto-detect if None)
-            batch_size: WhisperX batch size (reduce if low on GPU memory)
-        
-        Returns:
-            dict with transcription data including text, sentences, words
+        Transcribe a video/audio file using Faster-Whisper
         """
         file_path = Path(file_path)
         if not file_path.exists():
@@ -55,99 +37,88 @@ class TranscriptionService:
         
         logger.info(f"Starting transcription for: {file_path.name}")
         
-        if CLIPSAI_AVAILABLE:
-            return self._transcribe_with_clipsai(file_path, language, batch_size)
-        else:
-            return self._transcribe_fallback(file_path, language)
-    
-    def _transcribe_with_clipsai(
-        self, 
-        file_path: Path, 
-        language: Optional[str],
-        batch_size: int
-    ) -> dict:
-        """Transcribe using ClipsAI/WhisperX"""
-        if self._transcriber is None:
-            self._transcriber = ClipsAITranscriber()
-        
-        transcription = self._transcriber.transcribe(
-            audio_file_path=str(file_path.absolute()),
-            iso6391_lang_code=language,
-            batch_size=batch_size
-        )
-        
-        logger.info(f"Transcription complete. Language: {transcription.language}")
-        
-        return {
-            "text": transcription.text,
-            "language": transcription.language,
-            "start_time": transcription.start_time,
-            "end_time": transcription.end_time,
-            "sentences": [
-                {
-                    "text": s.text,
-                    "start_time": s.start_time,
-                    "end_time": s.end_time,
-                    "start_char": s.start_char,
-                    "end_char": s.end_char,
-                }
-                for s in transcription.sentences
-            ],
-            "words": [
-                {
-                    "text": w.text,
-                    "start_time": w.start_time,
-                    "end_time": w.end_time,
-                }
-                for w in transcription.words
-            ],
-            "_transcription_obj": transcription
-        }
-    
-    def _transcribe_fallback(
-        self, 
-        file_path: Path, 
+        return self._transcribe_with_faster_whisper(file_path, language)
+
+    def _transcribe_with_faster_whisper(
+        self,
+        file_path: Path,
         language: Optional[str]
     ) -> dict:
-        """
-        Fallback transcription placeholder.
-        In a real implementation, this would use a simpler whisper setup.
-        For now, returns a mock transcription for testing.
-        """
-        logger.warning("Using fallback transcription (mock data)")
+        """Transcribe using Faster-Whisper directly"""
+        from faster_whisper import WhisperModel
+        import torch
+        import gc
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Use int8 on CPU to be faster
+        compute_type = "float16" if torch.cuda.is_available() else "int8"
         
-        # Get video duration using ffprobe
-        duration = self._get_duration(file_path)
+        logger.info(f"Loading Faster-Whisper model on {device} with {compute_type}...")
         
-        # Create mock transcription data for UI testing
-        mock_text = (
-            "This is a placeholder transcription. "
-            "The full ClipsAI transcription service is not available. "
-            "Please install pyannote.audio for full functionality. "
-            "This mock data allows you to test the UI workflow."
-        )
-        
-        return {
-            "text": mock_text,
-            "language": language or "en",
-            "start_time": 0.0,
-            "end_time": duration,
-            "sentences": [
-                {
-                    "text": mock_text,
-                    "start_time": 0.0,
-                    "end_time": duration,
-                    "start_char": 0,
-                    "end_char": len(mock_text),
-                }
-            ],
-            "words": [
-                {"text": word, "start_time": i * 0.5, "end_time": (i + 1) * 0.5}
-                for i, word in enumerate(mock_text.split())
-            ],
-            "_transcription_obj": None,
-            "_is_fallback": True,
-        }
+        try:
+            # 1. Transcribe
+            # Use 'small' model for speed/quality balance
+            model = WhisperModel("small", device=device, compute_type=compute_type)
+            
+            segments, info = model.transcribe(
+                str(file_path), 
+                beam_size=5, 
+                language=language,
+                word_timestamps=True
+            )
+            
+            detected_language = info.language
+            logger.info(f"Detected language: {detected_language} (prob: {info.language_probability:.2f})")
+            
+            # 2. Format output
+            sentences = []
+            words = []
+            full_text = ""
+            
+            # segments is a generator, so we iterate
+            for segment in segments:
+                text = segment.text.strip()
+                full_text += text + " "
+                
+                # Create sentence entry
+                # Note: faster-whisper segments are roughly sentence-like but not strictly sentences
+                sentences.append({
+                    "text": text,
+                    "start_time": segment.start,
+                    "end_time": segment.end,
+                    "start_char": len(full_text) - len(text) - 1,
+                    "end_char": len(full_text) - 1,
+                })
+                
+                if segment.words:
+                    for word in segment.words:
+                        words.append({
+                            "text": word.word.strip(),
+                            "start_time": word.start,
+                            "end_time": word.end,
+                        })
+            
+            # Clean up
+            del model
+            gc.collect()
+            if device == "cuda":
+                torch.cuda.empty_cache()
+
+            duration = self._get_duration(file_path)
+
+            return {
+                "text": full_text.strip(),
+                "language": detected_language,
+                "start_time": 0.0,
+                "end_time": duration,
+                "sentences": sentences,
+                "words": words,
+                "_transcription_obj": None, # No native obj needed
+                "_is_fallback": False
+            }
+        except Exception as e:
+            logger.error(f"Faster-Whisper transcription failed: {e}")
+            raise e
     
     def _get_duration(self, file_path: Path) -> float:
         """Get media duration using ffprobe"""
@@ -168,12 +139,9 @@ class TranscriptionService:
     
     def detect_language(self, file_path: str | Path) -> str:
         """Detect the language of a media file"""
-        if CLIPSAI_AVAILABLE and self._transcriber:
-            file_path = Path(file_path)
-            return self._transcriber.detect_language(
-                audio_file_path=str(file_path.absolute())
-            )
-        return "en"  # Default fallback
+        # We could use faster-whisper to detect, but for now fallback to 'en'
+        # or implement a lightweight check
+        return "en" 
 
 
 # Singleton instance

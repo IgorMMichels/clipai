@@ -10,7 +10,8 @@ import shutil
 import aiofiles
 
 from config import settings
-from models.schemas import VideoUploadRequest, VideoJobResponse, ProcessingStatus
+from models.schemas import VideoUploadRequest, YouTubeUploadRequest, VideoJobResponse, ProcessingStatus
+from services import youtube_service
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -77,6 +78,78 @@ async def upload_video(
         message="Video uploaded. Processing started.",
         clips_count=0,
     )
+
+
+@router.post("/youtube", response_model=VideoJobResponse)
+async def upload_youtube(
+    request: YouTubeUploadRequest,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Process a YouTube video
+    """
+    job_id = str(uuid.uuid4())
+    filename = f"{job_id}.mp4"
+    upload_path = settings.UPLOAD_DIR / filename
+    
+    # Create job entry
+    jobs[job_id] = {
+        "id": job_id,
+        "filename": filename,
+        "original_path": str(upload_path),
+        "status": ProcessingStatus.PENDING,
+        "progress": 0,
+        "message": "YouTube video queued",
+        "language": request.language,
+        "aspect_ratio": request.aspect_ratio,
+        "generate_description": request.generate_description,
+        "description_language": request.description_language,
+        "clips": [],
+        "source_url": request.url,
+    }
+    
+    # Start processing in background
+    background_tasks.add_task(process_youtube_job, job_id, request.url)
+    
+    return VideoJobResponse(
+        id=job_id,
+        status=ProcessingStatus.PENDING,
+        progress=0,
+        message="YouTube video queued for download.",
+        clips_count=0,
+    )
+
+
+async def process_youtube_job(job_id: str, url: str):
+    """Background task to download and process YouTube video"""
+    job = jobs.get(job_id)
+    if not job:
+        return
+        
+    try:
+        job["status"] = ProcessingStatus.DOWNLOADING
+        job["message"] = "Downloading YouTube video..."
+        job["progress"] = 5
+        
+        output_path = Path(job["original_path"])
+        
+        # Download
+        info = youtube_service.download_video(url, output_path)
+        
+        job["message"] = f"Downloaded: {info.get('title')}"
+        job["title"] = info.get("title")
+        job["duration"] = info.get("duration")
+        job["thumbnail"] = info.get("thumbnail")
+        
+        # Continue with normal processing
+        await process_video_job(job_id)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        job["status"] = ProcessingStatus.FAILED
+        job["message"] = f"Download failed: {str(e)}"
+
 
 
 async def process_video_job(job_id: str):

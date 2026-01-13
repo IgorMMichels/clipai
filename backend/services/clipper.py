@@ -1,170 +1,173 @@
 """
-Clip Finding Service with Fallback
-Finds optimal clips using TextTiling algorithm or simple segmentation
+Clip Finding Service
+Finds optimal clips using sentence-based segmentation and heuristic virality scoring.
 """
 import logging
-from pathlib import Path
-from typing import List, Optional
 import uuid
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
-
-# Try to import clipsai, but don't fail if not available
-CLIPSAI_AVAILABLE = False
-try:
-    from clipsai import ClipFinder as ClipsAIClipFinder
-    CLIPSAI_AVAILABLE = True
-    logger.info("ClipsAI ClipFinder available")
-except ImportError as e:
-    logger.warning(f"ClipsAI ClipFinder not available: {e}. Using fallback clip detection.")
-
 
 class ClipFinderService:
     """Service for finding clips in transcribed content"""
     
     def __init__(self):
-        self._clip_finder = None
+        # Heuristic keywords for virality
+        self.viral_keywords = {
+            "amazing": 1.5, "incredible": 1.5, "wow": 2.0, "secret": 1.8,
+            "hack": 1.5, "money": 1.2, "viral": 1.5, "crazy": 1.4,
+            "best": 1.2, "worst": 1.2, "never": 1.2, "always": 1.2,
+            "life hack": 2.0, "tutorial": 1.3, "how to": 1.3,
+            "omg": 2.0, "lol": 1.5, "funny": 1.2, "scary": 1.3,
+            "love": 1.2, "hate": 1.2, "stop": 1.3, "wait": 1.4
+        }
     
     @property
     def is_available(self) -> bool:
-        """Check if clip finding is available"""
-        return True  # We always have at least fallback
+        return True
     
     def find_clips(
         self,
-        transcription_obj,
+        transcription_obj: Dict[str, Any],
         min_duration: float = 30.0,
-        max_duration: float = 120.0,
+        max_duration: float = 60.0,
     ) -> List[dict]:
         """
-        Find clips from a transcription
-        
-        Args:
-            transcription_obj: ClipsAI Transcription object or dict
-            min_duration: Minimum clip duration in seconds
-            max_duration: Maximum clip duration in seconds
-        
-        Returns:
-            List of clip dictionaries with timing and transcript info
+        Find clips from a transcription dictionary.
+        Uses a sliding window over sentences to find segments that fit duration constraints
+        and maximize 'virality' score.
         """
-        logger.info("Finding clips...")
+        logger.info("Finding clips using custom heuristic engine...")
         
-        # Check if we have a ClipsAI transcription object
-        if CLIPSAI_AVAILABLE and transcription_obj is not None and hasattr(transcription_obj, 'words'):
-            return self._find_clips_clipsai(transcription_obj, min_duration, max_duration)
-        else:
-            return self._find_clips_fallback(transcription_obj, min_duration, max_duration)
-    
-    def _find_clips_clipsai(
-        self,
-        transcription_obj,
-        min_duration: float,
-        max_duration: float,
-    ) -> List[dict]:
-        """Find clips using ClipsAI's TextTiling algorithm"""
-        if self._clip_finder is None:
-            self._clip_finder = ClipsAIClipFinder()
-        
-        clips = self._clip_finder.find_clips(transcription=transcription_obj)
-        
-        logger.info(f"Found {len(clips)} potential clips")
-        
-        processed_clips = []
-        for clip in clips:
-            duration = clip.end_time - clip.start_time
+        sentences = transcription_obj.get("sentences", [])
+        if not sentences:
+            logger.warning("No sentences found in transcription. Returning empty list.")
+            return []
             
-            if duration < min_duration or duration > max_duration:
-                continue
-            
-            clip_transcript = self._extract_clip_transcript(
-                transcription_obj, 
-                clip.start_time, 
-                clip.end_time
-            )
-            
-            processed_clips.append({
-                "id": str(uuid.uuid4()),
-                "start_time": clip.start_time,
-                "end_time": clip.end_time,
-                "duration": duration,
-                "start_char": clip.start_char,
-                "end_char": clip.end_char,
-                "transcript": clip_transcript,
-            })
-        
-        logger.info(f"Returning {len(processed_clips)} clips after filtering")
-        return processed_clips
-    
-    def _find_clips_fallback(
-        self,
-        transcription_data: dict,
-        min_duration: float,
-        max_duration: float,
-    ) -> List[dict]:
-        """
-        Fallback clip detection using simple time-based segmentation.
-        Divides the video into segments based on duration preferences.
-        """
-        logger.warning("Using fallback clip detection (simple segmentation)")
-        
-        # Handle both dict and object transcription data
-        if isinstance(transcription_data, dict):
-            total_duration = transcription_data.get("end_time", 300.0)
-            full_text = transcription_data.get("text", "")
-        else:
-            total_duration = getattr(transcription_data, "end_time", 300.0)
-            full_text = getattr(transcription_data, "text", "")
-        
         clips = []
         
-        # Create clips at regular intervals
-        target_duration = (min_duration + max_duration) / 2  # 75 seconds default
-        
-        current_time = 0.0
-        clip_index = 0
-        
-        while current_time < total_duration:
-            clip_end = min(current_time + target_duration, total_duration)
-            clip_duration = clip_end - current_time
+        # Sliding window approach
+        # Start from each sentence and build a clip
+        i = 0
+        while i < len(sentences):
+            current_duration = 0.0
+            current_text = ""
+            start_time = sentences[i]["start_time"]
+            start_char = sentences[i].get("start_char", 0)
             
-            if clip_duration >= min_duration:
-                # Calculate approximate text for this clip
-                text_start = int((current_time / total_duration) * len(full_text))
-                text_end = int((clip_end / total_duration) * len(full_text))
-                clip_text = full_text[text_start:text_end].strip()
+            # Look ahead to build a clip
+            j = i
+            best_clip_end_idx = -1
+            
+            while j < len(sentences):
+                sent = sentences[j]
+                current_duration = sent["end_time"] - start_time
                 
-                if not clip_text:
-                    clip_text = f"Clip {clip_index + 1} from {current_time:.1f}s to {clip_end:.1f}s"
+                if current_duration < min_duration:
+                    j += 1
+                    continue
+                
+                if current_duration > max_duration:
+                    break
+                
+                # Valid duration window [min_duration, max_duration]
+                # We could just take the first valid one, or try to extend to find a better ending?
+                # For now, let's take chunks ~ midway between min and max
+                best_clip_end_idx = j
+                j += 1
+            
+            if best_clip_end_idx != -1:
+                # Construct clip
+                end_sentence = sentences[best_clip_end_idx]
+                end_time = end_sentence["end_time"]
+                duration = end_time - start_time
+                
+                # Extract text
+                clip_sentences = sentences[i : best_clip_end_idx + 1]
+                transcript = " ".join([s["text"] for s in clip_sentences])
+                
+                # Calculate Score
+                score = self._calculate_score(transcript, duration)
                 
                 clips.append({
                     "id": str(uuid.uuid4()),
-                    "start_time": current_time,
-                    "end_time": clip_end,
-                    "duration": clip_duration,
-                    "start_char": text_start,
-                    "end_char": text_end,
-                    "transcript": clip_text,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "duration": duration,
+                    "start_char": start_char,
+                    "end_char": end_sentence.get("end_char", 0),
+                    "transcript": transcript,
+                    "score": score,
                 })
-                clip_index += 1
-            
-            current_time = clip_end
+                
+                # Move window: skip some sentences to avoid too much overlap
+                # e.g. advance by half the clip length (in sentences)
+                advance = max(1, (best_clip_end_idx - i) // 2)
+                i += advance
+            else:
+                # Couldn't form a clip starting at i (probably near end of video)
+                i += 1
         
-        logger.info(f"Created {len(clips)} clips using fallback segmentation")
-        return clips
-    
-    def _extract_clip_transcript(
-        self,
-        transcription,
-        start_time: float,
-        end_time: float
-    ) -> str:
-        """Extract transcript text for a specific time range"""
-        words = []
-        for word in transcription.words:
-            if word.start_time >= start_time and word.end_time <= end_time:
-                words.append(word.text)
-        return " ".join(words)
+        # Sort by score descending
+        clips.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Filter overlaps if needed (simple version: just return top N)
+        # Or remove clips that overlap significantly with higher scored clips
+        final_clips = self._remove_overlaps(clips)
+        
+        logger.info(f"Found {len(final_clips)} clips.")
+        return final_clips[:10]  # Return top 10
 
+    def _calculate_score(self, text: str, duration: float) -> float:
+        """Calculate virality score (0-100)"""
+        base_score = 70.0
+        text_lower = text.lower()
+        
+        # Keyword bonus
+        keyword_score = 0.0
+        for word, multiplier in self.viral_keywords.items():
+            if word in text_lower:
+                keyword_score += 5.0 * multiplier
+        
+        # Cap keyword score
+        keyword_score = min(25.0, keyword_score)
+        
+        # Pace bonus (words per second) - faster is usually more energetic
+        word_count = len(text.split())
+        wps = word_count / duration if duration > 0 else 0
+        pace_score = 0.0
+        if wps > 2.5: # Fast talker
+            pace_score = 5.0
+        
+        total_score = base_score + keyword_score + pace_score
+        return min(99.9, total_score)
+
+    def _remove_overlaps(self, clips: List[dict]) -> List[dict]:
+        """Remove clips that overlap significantly, keeping higher scored ones"""
+        if not clips:
+            return []
+            
+        kept_clips = []
+        # Clips are already sorted by score desc
+        
+        for clip in clips:
+            is_overlap = False
+            for kept in kept_clips:
+                # Check intersection
+                start = max(clip["start_time"], kept["start_time"])
+                end = min(clip["end_time"], kept["end_time"])
+                overlap = max(0, end - start)
+                
+                # If overlap is > 30% of the smaller clip's duration, reject it
+                min_dur = min(clip["duration"], kept["duration"])
+                if overlap > (0.3 * min_dur):
+                    is_overlap = True
+                    break
+            
+            if not is_overlap:
+                kept_clips.append(clip)
+                
+        return kept_clips
 
 # Singleton instance
 clip_finder_service = ClipFinderService()

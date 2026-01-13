@@ -5,6 +5,7 @@ from .resizer import resize_service, ResizeService
 from .editor import video_editor_service, VideoEditorService
 from .description import description_service, DescriptionGeneratorService
 from .effects import effects_service, EffectsService
+from .youtube import youtube_service, YouTubeService
 
 __all__ = [
     "transcription_service",
@@ -19,4 +20,6 @@ __all__ = [
     "DescriptionGeneratorService",
     "effects_service",
     "EffectsService",
+    "youtube_service",
+    "YouTubeService",
 ]

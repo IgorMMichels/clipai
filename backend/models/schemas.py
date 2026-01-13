@@ -6,6 +6,7 @@ from enum import Enum
 
 class ProcessingStatus(str, Enum):
     PENDING = "pending"
+    DOWNLOADING = "downloading"
     TRANSCRIBING = "transcribing"
     FINDING_CLIPS = "finding_clips"
     RESIZING = "resizing"
@@ -22,12 +23,21 @@ class VideoUploadRequest(BaseModel):
     description_language: str = "en"  # "en" or "pt"
 
 
+class YouTubeUploadRequest(BaseModel):
+    url: str
+    language: Optional[str] = None
+    aspect_ratio: tuple[int, int] = (9, 16)
+    generate_description: bool = True
+    description_language: str = "en"
+
+
 class ClipInfo(BaseModel):
     id: str
     start_time: float
     end_time: float
     duration: float
     transcript: str
+    score: float = 0.0
     description: Optional[str] = None
     output_path: Optional[str] = None
 

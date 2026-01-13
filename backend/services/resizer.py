@@ -1,21 +1,14 @@
 """
-ClipsAI Resizing Service
-Handles video aspect ratio conversion with speaker tracking
+Resizing Service
+Handles video aspect ratio conversion with speaker tracking using OpenCV Haar Cascades.
 """
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
+import cv2
+import numpy as np
 
 logger = logging.getLogger(__name__)
-
-# Check if clipsai resize is available (requires mediapipe)
-RESIZE_AVAILABLE = False
-try:
-    from clipsai import resize as clipsai_resize
-    RESIZE_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"ClipsAI resize not available: {e}. Speaker tracking disabled.")
-
 
 class ResizeService:
     """Service for resizing videos to different aspect ratios"""
@@ -25,8 +18,7 @@ class ResizeService:
     
     @property
     def is_available(self) -> bool:
-        """Check if resize functionality is available"""
-        return RESIZE_AVAILABLE
+        return True
     
     def resize(
         self,
@@ -37,133 +29,152 @@ class ResizeService:
         samples_per_segment: int = 13,
     ) -> dict:
         """
-        Resize a video to a new aspect ratio with speaker tracking
-        
-        Args:
-            video_path: Path to the video file
-            pyannote_token: HuggingFace token for Pyannote
-            aspect_ratio: Target aspect ratio (width, height)
-            min_segment_duration: Minimum speaker segment duration
-            samples_per_segment: Samples per segment for face detection
-        
-        Returns:
-            dict with crop information and segments
+        Resize a video to a new aspect ratio with face tracking using OpenCV
         """
         video_path = Path(video_path)
+        logger.info(f"Resizing video to {aspect_ratio[0]}:{aspect_ratio[1]} using OpenCV")
         
-        if not RESIZE_AVAILABLE:
-            # Fallback: center crop without speaker tracking
-            logger.warning("Using center crop fallback (mediapipe not available)")
-            return self._center_crop_fallback(video_path, aspect_ratio)
-        
-        token = pyannote_token or self.pyannote_token
-        
-        if not token:
-            logger.warning("No Pyannote token provided, using center crop fallback")
-            return self._center_crop_fallback(video_path, aspect_ratio)
-        
-        logger.info(f"Resizing video to {aspect_ratio[0]}:{aspect_ratio[1]}")
-        
-        crops = clipsai_resize(
-            video_file_path=str(video_path.absolute()),
-            pyannote_auth_token=token,
-            aspect_ratio=aspect_ratio,
-            min_segment_duration=min_segment_duration,
-            samples_per_segment=samples_per_segment,
-        )
-        
-        logger.info(f"Resize complete. {len(crops.segments)} segments found")
-        
-        return {
-            "crop_width": crops.crop_width,
-            "crop_height": crops.crop_height,
-            "original_width": crops.original_width,
-            "original_height": crops.original_height,
-            "segments": [
-                {
-                    "x": seg.x,
-                    "y": seg.y,
-                    "start_time": seg.start_time,
-                    "end_time": seg.end_time,
-                    "speakers": seg.speakers,
-                }
-                for seg in crops.segments
-            ],
-            "_crops_obj": crops  # Keep original for MediaEditor
-        }
-    
-    def _center_crop_fallback(
-        self, 
-        video_path: Path, 
-        aspect_ratio: Tuple[int, int]
-    ) -> dict:
-        """
-        Fallback center crop when speaker tracking is not available
-        """
-        import subprocess
-        import json
-        
-        # Get video dimensions using ffprobe
-        try:
-            result = subprocess.run(
-                [
-                    "ffprobe", "-v", "quiet", "-print_format", "json",
-                    "-show_streams", str(video_path)
-                ],
-                capture_output=True,
-                text=True
-            )
-            probe = json.loads(result.stdout)
-            video_stream = next(
-                (s for s in probe["streams"] if s["codec_type"] == "video"),
-                None
-            )
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            raise RuntimeError(f"Could not open video: {video_path}")
             
-            if video_stream:
-                orig_width = int(video_stream["width"])
-                orig_height = int(video_stream["height"])
-            else:
-                orig_width, orig_height = 1920, 1080
-        except Exception as e:
-            logger.warning(f"Could not get video dimensions: {e}")
-            orig_width, orig_height = 1920, 1080
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total_frames / fps if fps > 0 else 0
         
-        # Calculate crop dimensions
-        target_w, target_h = aspect_ratio
-        target_ratio = target_w / target_h
-        orig_ratio = orig_width / orig_height
+        target_w_ratio, target_h_ratio = aspect_ratio
+        target_aspect = target_w_ratio / target_h_ratio
         
-        if orig_ratio > target_ratio:
-            # Video is wider, crop width
-            crop_height = orig_height
-            crop_width = int(orig_height * target_ratio)
+        # Calculate target crop size
+        if width / height > target_aspect:
+            # Video is wider than target
+            crop_h = height
+            crop_w = int(height * target_aspect)
         else:
-            # Video is taller, crop height
-            crop_width = orig_width
-            crop_height = int(orig_width / target_ratio)
+            # Video is taller than target
+            crop_w = width
+            crop_h = int(width / target_aspect)
+            
+        # Detect faces using Haar Cascades
+        try:
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        except AttributeError:
+            # Fallback if cv2.data is not available (rare)
+            logger.warning("cv2.data.haarcascades not found, using center crop")
+            return self._center_crop_fallback(video_path, aspect_ratio)
+
+        centers = []
         
-        # Center crop position
-        x = (orig_width - crop_width) // 2
-        y = (orig_height - crop_height) // 2
+        # Sample frames (every 0.5 seconds)
+        step_frames = int(fps * 0.5) if fps > 0 else 15
+        if step_frames < 1: step_frames = 1
+        
+        for i in range(0, total_frames, step_frames):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+            success, image = cap.read()
+            if not success:
+                break
+            
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+            
+            center_x = width // 2
+            
+            if len(faces) > 0:
+                # Find largest face
+                max_area = 0
+                for (x, y, w, h) in faces:
+                    area = w * h
+                    if area > max_area:
+                        max_area = area
+                        # Center of the face
+                        face_x = x + w // 2
+                        center_x = face_x
+            
+            centers.append((i / fps, center_x))
+                
+        cap.release()
+        
+        # Segments logic
+        segments = []
+        if not centers:
+             return self._center_crop_fallback(video_path, aspect_ratio)
+
+        current_x = centers[0][1]
+        start_t = 0.0
+        
+        def clamp_x(x):
+            half_w = crop_w // 2
+            return max(0, min(width - crop_w, x - half_w))
+
+        last_x = current_x
+        segment_start_time = 0.0
+        
+        for t, x in centers:
+            # If face moves more than 10% of width, cut
+            if abs(x - last_x) > width * 0.1:
+                segments.append({
+                    "x": clamp_x(last_x),
+                    "y": 0,
+                    "start_time": segment_start_time,
+                    "end_time": t
+                })
+                segment_start_time = t
+                last_x = x
+        
+        # Add final segment
+        segments.append({
+            "x": clamp_x(last_x),
+            "y": 0,
+            "start_time": segment_start_time,
+            "end_time": duration
+        })
         
         return {
-            "crop_width": crop_width,
-            "crop_height": crop_height,
-            "original_width": orig_width,
-            "original_height": orig_height,
-            "segments": [
-                {
-                    "x": x,
-                    "y": y,
-                    "start_time": 0,
-                    "end_time": None,  # Full video
-                    "speakers": [],
-                }
-            ],
-            "_crops_obj": None,
-            "_is_fallback": True,
+            "crop_width": crop_w,
+            "crop_height": crop_h,
+            "original_width": width,
+            "original_height": height,
+            "segments": segments,
+            "_crops_obj": None 
         }
 
+    def _center_crop_fallback(self, video_path: Path, aspect_ratio: Tuple[int, int]) -> dict:
+        """Fallback center crop"""
+        cap = cv2.VideoCapture(str(video_path))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        
+        target_w, target_h = aspect_ratio
+        target_ratio = target_w / target_h
+        
+        if width / height > target_ratio:
+            crop_h = height
+            crop_w = int(height * target_ratio)
+        else:
+            crop_w = width
+            crop_h = int(width / target_ratio)
+            
+        x = (width - crop_w) // 2
+        y = (height - crop_h) // 2
+        
+        return {
+            "crop_width": crop_w,
+            "crop_height": crop_h,
+            "original_width": width,
+            "original_height": height,
+            "segments": [{
+                "x": x, "y": y, 
+                "start_time": 0, 
+                "end_time": total_frames/fps if fps else 0
+            }],
+            "_crops_obj": None
+        }
 
 # Singleton instance
 resize_service = ResizeService()

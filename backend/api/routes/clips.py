@@ -221,3 +221,46 @@ async def download_clip(export_id: str, clip_index: int):
         filename=file_path.name,
         media_type="video/mp4",
     )
+
+
+@router.post("/{job_id}/preview/{clip_id}")
+async def generate_preview(
+    job_id: str, 
+    clip_id: str,
+    aspect_ratio_w: int = 9,
+    aspect_ratio_h: int = 16,
+):
+    """Generate a quick preview for a specific clip"""
+    from services import video_editor_service
+    
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    clip = next((c for c in job["clips"] if c["id"] == clip_id), None)
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+        
+    # Define output path
+    output_dir = settings.OUTPUT_DIR / job_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_filename = f"preview_{clip_id}.mp4"
+    output_path = output_dir / output_filename
+    
+    # Return existing if available
+    if output_path.exists():
+        return {"url": f"/outputs/{job_id}/{output_filename}", "status": "ready"}
+        
+    try:
+        video_path = Path(job["original_path"])
+        video_editor_service.generate_preview(
+            input_path=video_path,
+            output_path=output_path,
+            start_time=clip["start_time"],
+            end_time=clip["end_time"],
+            aspect_ratio=(aspect_ratio_w, aspect_ratio_h),
+        )
+        return {"url": f"/outputs/{job_id}/{output_filename}", "status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

@@ -29,6 +29,7 @@ pydantic>=2.6.0
 pydantic-settings>=2.1.0
 aiofiles>=23.2.1
 python-magic>=0.4.27
+yt-dlp>=2023.11.16
 
 # WhisperX (install separately after main dependencies)
 # pip install whisperx@git+https://github.com/m-bain/whisperx.git
