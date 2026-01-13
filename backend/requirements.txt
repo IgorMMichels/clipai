@@ -1,0 +1,34 @@
+# FastAPI and server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# ClipsAI and dependencies
+clipsai>=0.2.1
+
+# Video processing
+moviepy>=2.0.0
+ffmpeg-python>=0.2.0
+
+# AI/ML
+google-generativeai>=0.4.0
+openai>=1.12.0
+anthropic>=0.18.0
+
+# Task queue (optional - comment out if not using)
+# celery[redis]>=5.3.6
+# redis>=5.0.1
+
+# Database
+sqlalchemy>=2.0.25
+aiosqlite>=0.19.0
+
+# Utilities
+python-dotenv>=1.0.1
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+aiofiles>=23.2.1
+python-magic>=0.4.27
+
+# WhisperX (install separately after main dependencies)
+# pip install whisperx@git+https://github.com/m-bain/whisperx.git
