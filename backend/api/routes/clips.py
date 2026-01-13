@@ -132,18 +132,32 @@ async def process_export(
             )
             
             # Step 2: Resize (if needed)
-            if request.aspect_ratio != (16, 9):
+            if request.aspect_ratio != (16, 9) or request.layout == "stacked":
                 resized_path = output_dir / f"clip_{i+1}_resized.mp4"
+                
+                # Determine AR for face tracking
+                face_ar = request.aspect_ratio
+                if request.layout == "stacked":
+                    face_ar = (1, 1)  # Square crop for face in stacked mode
+                    
                 crops = resize_service.resize(
                     video_path=clip_path,
                     pyannote_token=settings.HUGGINGFACE_TOKEN,
-                    aspect_ratio=request.aspect_ratio,
+                    aspect_ratio=face_ar,
                 )
-                video_editor_service.resize_video(
-                    input_path=clip_path,
-                    output_path=resized_path,
-                    crops_data=crops,
-                )
+                
+                if request.layout == "stacked":
+                    video_editor_service.apply_stacked_layout(
+                        input_path=clip_path,
+                        output_path=resized_path,
+                        crops_data=crops,
+                    )
+                else:
+                    video_editor_service.resize_video(
+                        input_path=clip_path,
+                        output_path=resized_path,
+                        crops_data=crops,
+                    )
                 clip_path = resized_path
             
             # Step 3: Add subtitles (if requested)

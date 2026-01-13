@@ -45,7 +45,8 @@ async def upload_video(
     
     # Generate job ID and save file
     job_id = str(uuid.uuid4())
-    file_ext = Path(file.filename).suffix
+    filename = file.filename or "unknown"
+    file_ext = Path(filename).suffix
     upload_path = settings.UPLOAD_DIR / f"{job_id}{file_ext}"
     
     # Save uploaded file

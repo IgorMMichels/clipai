@@ -67,6 +67,7 @@ class VideoJobResponse(BaseModel):
 class ClipExportRequest(BaseModel):
     clip_ids: List[str]
     aspect_ratio: tuple[int, int] = (9, 16)
+    layout: str = "fill"  # "fill" or "stacked"
     add_music: bool = False
     music_track: Optional[str] = None
     add_subtitles: bool = True

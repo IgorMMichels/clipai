@@ -205,6 +205,85 @@ class VideoEditorService:
         logger.info(f"Added subtitles to: {output_path}")
         return output_path
     
+    def apply_stacked_layout(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        crops_data: dict,
+    ) -> Path:
+        """
+        Apply a stacked layout: Top = Gameplay (centered), Bottom = Face (cropped)
+        """
+        from moviepy import VideoFileClip, concatenate_videoclips, CompositeVideoClip, ColorClip
+        
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Applying stacked layout to: {input_path}")
+        
+        # Load clip
+        clip = VideoFileClip(str(input_path))
+        
+        # Target Dimensions for 9:16
+        target_w = 1080
+        target_h = 1920
+        
+        # 1. Top Part: Gameplay
+        # Scale original to width 1080
+        gameplay = clip.resized(width=target_w)
+        
+        # 2. Bottom Part: Face Crop
+        # Generate the face clip using crops_data
+        subclips = []
+        segments = crops_data["segments"]
+        cw = crops_data["crop_width"]
+        ch = crops_data["crop_height"]
+        
+        for seg in segments:
+            start = seg["start_time"]
+            end = seg["end_time"] if seg["end_time"] is not None else clip.duration
+            end = min(end, clip.duration)
+            if start >= end: continue
+            
+            x1 = int(seg["x"])
+            y1 = int(seg["y"])
+            
+            # Crop using moviepy
+            sub = clip.subclipped(start, end).cropped(x1=x1, y1=y1, width=cw, height=ch)
+            subclips.append(sub)
+            
+        if not subclips:
+             subclips.append(clip.resized(height=ch).cropped(width=cw, height=ch, x_center=clip.w/2, y_center=clip.h/2))
+
+        face_clip = concatenate_videoclips(subclips)
+        
+        # Resize face_clip to width 1080
+        face_clip = face_clip.resized(width=target_w)
+        
+        # Position face_clip at bottom
+        face_clip = face_clip.with_position(("center", "bottom"))
+        gameplay = gameplay.with_position(("center", "top"))
+        
+        # Create final composite
+        final = CompositeVideoClip([gameplay, face_clip], size=(target_w, target_h))
+        
+        final.write_videofile(
+            str(output_path),
+            codec="libx264",
+            audio_codec="aac",
+            temp_audiofile=str(output_path.with_suffix(".m4a")),
+            remove_temp=True,
+            logger=None
+        )
+        
+        clip.close()
+        gameplay.close()
+        face_clip.close()
+        final.close()
+        
+        return output_path
+
     def _create_srt(self, subtitles: List[dict], output_path: Path):
         """Create an SRT subtitle file"""
         def format_time(seconds: float) -> str:

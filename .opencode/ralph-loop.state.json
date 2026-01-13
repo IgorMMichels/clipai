@@ -1,6 +1,6 @@
 {
   "active": true,
-  "iteration": 1,
+  "iteration": 2,
   "maxIterations": 20,
   "completionPromise": "COMPLETE",
   "prompt": "Build a functional AI clipping tool that helps people to create viral clips by using local ai or from api keys to find the best and most viral clips from videos like youtube and from source too, the idea here is that i can paste an youtube link or a video source into the local website and it should run it locally to find and generate the best clips with a % of virality and also a cut on the webcam if a live and a transcription fully made with ai, you can consult dthe clipsai documentation that is installed on the project, understand how he does that and implement it here, try being as optimized as possible, generating clips with not the best quality, because it should have a button to like select that clip to install and then just then the clip would be fully rendered to help performance, try getting free options for using ai so maybe using local ais too, this was already built but has to be revamped, the ai you can make improvements but the idea is already formed.\\  Output <promise>COMPLETE FUNCTIONAL PLATFORM WITHOUT A MOCK FUNCTIONING WITH TRANSCRIPTION AND THE YOUTUBE LINK AND BEING ABLE TO EXPORT</promise> when all tests pass.",
