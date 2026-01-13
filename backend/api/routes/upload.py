@@ -101,28 +101,40 @@ async def process_video_job(job_id: str):
         job["language"] = transcription["language"]
         job["progress"] = 40
         
+        # Check if using fallback
+        is_fallback = transcription.get("_is_fallback", False)
+        if is_fallback:
+            job["message"] = "Using fallback transcription (limited mode)"
+        
         # Step 2: Find clips
         job["status"] = ProcessingStatus.FINDING_CLIPS
         job["message"] = "Finding optimal clips..."
         
+        # Pass either the ClipsAI object or the full transcription dict for fallback
+        transcription_for_clips = transcription.get("_transcription_obj") or transcription
         clips = clip_finder_service.find_clips(
-            transcription_obj=transcription["_transcription_obj"]
+            transcription_obj=transcription_for_clips
         )
         job["clips"] = clips
         job["progress"] = 70
         
         # Step 3: Generate descriptions (optional)
-        if job["generate_description"]:
+        if job["generate_description"] and clips:
             job["status"] = ProcessingStatus.GENERATING_DESCRIPTION
             job["message"] = "Generating descriptions..."
             
             for clip in job["clips"]:
-                result = description_service.generate_description(
-                    transcript=clip["transcript"],
-                    language=job["description_language"],
-                )
-                clip["description"] = result["description"]
-                clip["hashtags"] = result["hashtags"]
+                try:
+                    result = description_service.generate_description(
+                        transcript=clip["transcript"],
+                        language=job["description_language"],
+                    )
+                    clip["description"] = result["description"]
+                    clip["hashtags"] = result["hashtags"]
+                except Exception as e:
+                    # Don't fail the whole job if description fails
+                    clip["description"] = clip["transcript"][:200] + "..."
+                    clip["hashtags"] = ["#video", "#clip"]
             
             job["progress"] = 90
         
@@ -131,7 +143,12 @@ async def process_video_job(job_id: str):
         job["progress"] = 100
         job["message"] = f"Found {len(clips)} clips!"
         
+        if is_fallback:
+            job["message"] += " (Fallback mode - install pyannote for full features)"
+        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         job["status"] = ProcessingStatus.FAILED
         job["message"] = f"Error: {str(e)}"
 
