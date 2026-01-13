@@ -24,11 +24,16 @@ async def test_workflow():
     })
     
     transcription_service.transcribe = MagicMock(return_value={
-        "text": "This is a test transcription for a viral video clip generator.",
+        "text": "This is a test transcription for a viral video clip generator. This is amazing and incredible! A secret life hack that changes everything.",
         "language": "en",
         "start_time": 0.0,
         "end_time": 600.0,
-        "sentences": [],
+        "sentences": [
+            {"text": "This is a test transcription for a viral video clip generator.", "start_time": 0.0, "end_time": 5.0, "start_char": 0},
+            {"text": "This is amazing and incredible!", "start_time": 5.0, "end_time": 10.0, "start_char": 63},
+            {"text": "A secret life hack that changes everything.", "start_time": 10.0, "end_time": 15.0, "start_char": 95},
+             {"text": "Another sentence to fill time.", "start_time": 15.0, "end_time": 40.0, "start_char": 140}
+        ],
         "words": [],
         "_is_fallback": True
     })

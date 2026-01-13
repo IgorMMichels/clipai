@@ -73,7 +73,7 @@ class VideoEditorService:
         end_time: float,
     ) -> Path:
         """
-        Trim a video to create a clip using FFmpeg (re-encode for accuracy)
+        Trim a video to create a clip using FFmpeg (re-encode for accuracy and high quality)
         """
         input_path = Path(input_path)
         output_path = Path(output_path)
@@ -89,8 +89,10 @@ class VideoEditorService:
             "-i", str(input_path),
             "-t", str(duration),
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "slow",     # Better compression efficiency
+            "-crf", "18",          # Visually lossless
             "-c:a", "aac",
+            "-b:a", "192k",        # High audio quality
             str(output_path)
         ]
         
@@ -175,39 +177,88 @@ class VideoEditorService:
         video_path: str | Path,
         output_path: str | Path,
         subtitles: List[dict],
-        font_size: int = 24,
+        font_size: int = 24, # Ignored for ASS currently as we hardcode style
         font_color: str = "white",
         outline_color: str = "black",
     ) -> Path:
         """
-        Burn subtitles into a video using FFmpeg
+        Burn subtitles into a video using FFmpeg and ASS format for viral style
         """
         video_path = Path(video_path)
         output_path = Path(output_path)
         
-        # Create SRT file
-        srt_path = output_path.with_suffix(".srt")
-        self._create_srt(subtitles, srt_path)
+        # Create ASS file
+        ass_path = output_path.with_suffix(".ass")
+        self._create_ass(subtitles, ass_path)
         
         # Burn subtitles using FFmpeg
         # Escape path for filter
-        srt_path_str = str(srt_path).replace("\\", "/").replace(":", "\\:")
+        ass_path_str = str(ass_path).replace("\\", "/").replace(":", "\\:")
         
         cmd = [
             "ffmpeg", "-y",
             "-i", str(video_path),
-            "-vf", f"subtitles='{srt_path_str}':force_style='FontSize={font_size},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2'",
+            "-vf", f"ass='{ass_path_str}'",
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "20",  # High quality
             "-c:a", "copy",
             str(output_path)
         ]
         
-        subprocess.run(cmd, check=True, capture_output=True)
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg subtitle burning failed: {e.stderr.decode()}")
+            raise e
         
-        # Clean up SRT file
-        srt_path.unlink(missing_ok=True)
+        # Clean up ASS file
+        ass_path.unlink(missing_ok=True)
         
         logger.info(f"Added subtitles to: {output_path}")
         return output_path
+
+    def _create_ass(self, subtitles: List[dict], output_path: Path):
+        """Create an ASS subtitle file for viral word-by-word style"""
+        def format_time(seconds: float) -> str:
+            # H:MM:SS.cc
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            # centiseconds
+            cs = int((seconds % 1) * 100)
+            return f"{hours:1d}:{minutes:02d}:{secs:02d}.{cs:02d}"
+        
+        header = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,80,&H0000FFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,2,10,10,250,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+        # Style explanation:
+        # Fontsize 80 (big)
+        # PrimaryColour &H0000FFFF (Yellow in ASS BGR format -> 00 FFFF) - wait, standard is BGR? 
+        # Yes, ASS is &HAABBGGRR. Yellow is R=FF, G=FF, B=00. So &H0000FFFF.
+        # Outline: 3px Black (&H00000000)
+        # Alignment: 2 (Bottom Center)
+        # MarginV: 250 (Raised from bottom)
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(header)
+            for sub in subtitles:
+                start = format_time(sub['start_time'])
+                end = format_time(sub['end_time'])
+                text = sub['text']
+                # Highlight in Yellow (Default)
+                # We could add animation or karaoke here, but simple word flash is good for now.
+                f.write(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}\n")
+
     
     def apply_stacked_layout(
         self,
@@ -298,7 +349,6 @@ class VideoEditorService:
         final.close()
         
         return output_path
-
 
     def process_viral_clip(
         self,

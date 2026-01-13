@@ -5,6 +5,12 @@ Finds optimal clips using sentence-based segmentation and heuristic virality sco
 import logging
 import uuid
 from typing import List, Dict, Any
+import numpy as np
+try:
+    from sentence_transformers import SentenceTransformer, util
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +49,35 @@ class ClipFinderService:
             "ruim", "terrível", "triste", "falha", "perda", "feio", "dor", "morte", "perigo"
         }
 
+        # Semantic Search Initialization
+        self.model = None
+        self.viral_embeddings = None
+        self.use_semantic = HAS_TRANSFORMERS
+        
+        if self.use_semantic:
+            try:
+                logger.info("Loading SentenceTransformer model...")
+                self.model = SentenceTransformer('all-MiniLM-L6-v2')
+                
+                # Define viral concepts for semantic matching
+                self.viral_concepts = [
+                    "This is amazing and incredible",
+                    "A secret life hack that changes everything",
+                    "Shocking truth revealed",
+                    "Hilarious funny moment",
+                    "Deep emotional story",
+                    "Motivational success advice",
+                    "Unexpected plot twist",
+                    "Very dangerous situation",
+                    "Unbelievable fact",
+                    "How to make money fast"
+                ]
+                self.viral_embeddings = self.model.encode(self.viral_concepts, convert_to_tensor=True)
+                logger.info("SentenceTransformer model loaded.")
+            except Exception as e:
+                logger.error(f"Failed to load SentenceTransformer: {e}")
+                self.use_semantic = False
+
     @property
     def is_available(self) -> bool:
         return True
@@ -56,23 +91,39 @@ class ClipFinderService:
         """
         Find clips from a transcription dictionary.
         Uses a sliding window over sentences to find segments that fit duration constraints
-        and maximize 'virality' score.
+        and maximize 'virality' score (Heuristic + Semantic).
         """
-        logger.info("Finding clips using custom heuristic engine...")
+        logger.info("Finding clips using Hybrid (Heuristic + Semantic) engine...")
         
         sentences = transcription_obj.get("sentences", [])
         if not sentences:
             logger.warning("No sentences found in transcription. Returning empty list.")
             return []
             
+        # Pre-calculate semantic scores for all sentences if model is available
+        sentence_semantic_scores = []
+        if self.use_semantic and self.model:
+            try:
+                sentence_texts = [s["text"] for s in sentences]
+                embeddings = self.model.encode(sentence_texts, convert_to_tensor=True)
+                # Calculate max similarity to any viral concept for each sentence
+                cosine_scores = util.cos_sim(embeddings, self.viral_embeddings)
+                # cosine_scores shape: [num_sentences, num_viral_concepts]
+                # We take the max score for each sentence across all viral concepts
+                max_scores = cosine_scores.max(dim=1).values.cpu().numpy()
+                sentence_semantic_scores = max_scores.tolist()
+            except Exception as e:
+                logger.error(f"Error calculating semantic scores: {e}")
+                sentence_semantic_scores = [0.0] * len(sentences)
+        else:
+             sentence_semantic_scores = [0.0] * len(sentences)
+
         clips = []
         
         # Sliding window approach
-        # Start from each sentence and build a clip
         i = 0
         while i < len(sentences):
             current_duration = 0.0
-            current_text = ""
             start_time = sentences[i]["start_time"]
             start_char = sentences[i].get("start_char", 0)
             
@@ -91,9 +142,7 @@ class ClipFinderService:
                 if current_duration > max_duration:
                     break
                 
-                # Valid duration window [min_duration, max_duration]
-                # We could just take the first valid one, or try to extend to find a better ending?
-                # For now, let's take chunks ~ midway between min and max
+                # Valid duration window
                 best_clip_end_idx = j
                 j += 1
             
@@ -107,8 +156,23 @@ class ClipFinderService:
                 clip_sentences = sentences[i : best_clip_end_idx + 1]
                 transcript = " ".join([s["text"] for s in clip_sentences])
                 
-                # Calculate Score
-                score = self._calculate_score(transcript, duration)
+                # Semantic Score: Average of max semantic scores of sentences in clip
+                # (Or maybe max? Average seems safer for consistency)
+                if self.use_semantic:
+                    segment_scores = sentence_semantic_scores[i : best_clip_end_idx + 1]
+                    semantic_score = float(np.mean(segment_scores)) * 100.0 # Scale 0-1 to 0-100
+                else:
+                    semantic_score = 0.0
+
+                # Calculate Heuristic Score
+                heuristic_score = self._calculate_heuristic_score(transcript, duration)
+                
+                # Weighted Total Score
+                # 60% Semantic (Real AI), 40% Heuristic
+                if self.use_semantic:
+                    total_score = (semantic_score * 0.6) + (heuristic_score * 0.4)
+                else:
+                    total_score = heuristic_score
                 
                 clips.append({
                     "id": str(uuid.uuid4()),
@@ -118,28 +182,26 @@ class ClipFinderService:
                     "start_char": start_char,
                     "end_char": end_sentence.get("end_char", 0),
                     "transcript": transcript,
-                    "score": score,
+                    "score": min(99.9, total_score),
+                    "semantic_score": semantic_score if self.use_semantic else 0,
+                    "heuristic_score": heuristic_score
                 })
                 
-                # Move window: skip some sentences to avoid too much overlap
-                # e.g. advance by half the clip length (in sentences)
+                # Move window
                 advance = max(1, (best_clip_end_idx - i) // 2)
                 i += advance
             else:
-                # Couldn't form a clip starting at i (probably near end of video)
                 i += 1
         
         # Sort by score descending
         clips.sort(key=lambda x: x["score"], reverse=True)
         
-        # Filter overlaps if needed (simple version: just return top N)
-        # Or remove clips that overlap significantly with higher scored clips
         final_clips = self._remove_overlaps(clips)
         
         logger.info(f"Found {len(final_clips)} clips.")
-        return final_clips[:10]  # Return top 10
+        return final_clips[:10]
 
-    def _calculate_score(self, text: str, duration: float) -> float:
+    def _calculate_heuristic_score(self, text: str, duration: float) -> float:
         """Calculate virality score (0-100)"""
         base_score = 70.0
         text_lower = text.lower()

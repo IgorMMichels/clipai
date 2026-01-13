@@ -1,12 +1,14 @@
 """
 Resizing Service
-Handles video aspect ratio conversion with speaker tracking using OpenCV Haar Cascades.
+Handles video aspect ratio conversion with robust speaker tracking using OpenCV Haar Cascades.
+Optimized for Facecam detection (finding stable face positions).
 """
 import logging
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
 import cv2
 import numpy as np
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class ResizeService:
         Resize a video to a new aspect ratio with face tracking using OpenCV
         """
         video_path = Path(video_path)
-        logger.info(f"Resizing video to {aspect_ratio[0]}:{aspect_ratio[1]} using OpenCV")
+        logger.info(f"Resizing video to {aspect_ratio[0]}:{aspect_ratio[1]} using OpenCV (Robust Mode)")
         
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
@@ -61,14 +63,14 @@ class ResizeService:
         try:
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         except AttributeError:
-            # Fallback if cv2.data is not available (rare)
             logger.warning("cv2.data.haarcascades not found, using center crop")
             return self._center_crop_fallback(video_path, aspect_ratio)
 
-        centers = []
+        raw_centers = []
+        timestamps = []
         
-        # Sample frames (every 0.5 seconds)
-        step_frames = int(fps * 0.5) if fps > 0 else 15
+        # Sample frames (every 0.2 seconds for better temporal resolution)
+        step_frames = int(fps * 0.2) if fps > 0 else 5
         if step_frames < 1: step_frames = 1
         
         for i in range(0, total_frames, step_frames):
@@ -80,7 +82,7 @@ class ResizeService:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
             
-            center_x = width // 2
+            center_x = -1
             
             if len(faces) > 0:
                 # Find largest face
@@ -93,40 +95,69 @@ class ResizeService:
                         face_x = x + w // 2
                         center_x = face_x
             
-            centers.append((i / fps, center_x))
+            raw_centers.append(center_x)
+            timestamps.append(i / fps)
                 
         cap.release()
         
-        # Segments logic
-        segments = []
-        if not centers:
+        if not raw_centers:
              return self._center_crop_fallback(video_path, aspect_ratio)
 
-        current_x = centers[0][1]
-        start_t = 0.0
+        # Post-process centers to find STABLE face position (Facecam)
+        # 1. Fill missing detections (-1) with nearest neighbor or center
+        filled_centers = []
+        last_val = width // 2
+        
+        # Forward fill
+        for c in raw_centers:
+            if c != -1:
+                last_val = c
+            filled_centers.append(last_val)
+            
+        # 2. Median Filter to remove noise (jittery detections)
+        # Window size of ~1 second (5 samples if 0.2s step)
+        window_size = 5
+        smoothed_centers = []
+        for i in range(len(filled_centers)):
+             window = filled_centers[max(0, i - window_size // 2) : min(len(filled_centers), i + window_size // 2 + 1)]
+             if window:
+                 smoothed_centers.append(int(statistics.median(window)))
+             else:
+                 smoothed_centers.append(filled_centers[i])
+
+        # 3. Create Segments
+        # Only create a new segment if the face moves SIGNIFICANTLY (e.g. > 15% of width)
+        # This simulates a "camera cut" to the speaker
+        
+        segments = []
+        current_x = smoothed_centers[0]
+        segment_start_time = 0.0
         
         def clamp_x(x):
             half_w = crop_w // 2
             return max(0, min(width - crop_w, x - half_w))
 
-        last_x = current_x
-        segment_start_time = 0.0
-        
-        for t, x in centers:
-            # If face moves more than 10% of width, cut
-            if abs(x - last_x) > width * 0.1:
+        last_valid_x = current_x
+
+        for i, x in enumerate(smoothed_centers):
+            t = timestamps[i]
+            
+            # Check for significant movement
+            if abs(x - last_valid_x) > width * 0.15:
+                # Add previous segment
                 segments.append({
-                    "x": clamp_x(last_x),
+                    "x": clamp_x(last_valid_x),
                     "y": 0,
                     "start_time": segment_start_time,
                     "end_time": t
                 })
+                # Start new segment
                 segment_start_time = t
-                last_x = x
+                last_valid_x = x
         
         # Add final segment
         segments.append({
-            "x": clamp_x(last_x),
+            "x": clamp_x(last_valid_x),
             "y": 0,
             "start_time": segment_start_time,
             "end_time": duration

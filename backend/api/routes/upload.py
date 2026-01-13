@@ -167,9 +167,16 @@ async def process_video_job(job_id: str):
         job["progress"] = 10
         job["message"] = "Transcribing video..."
         
+        def update_progress(text):
+            if job_id in jobs:
+                jobs[job_id]["transcript"] = text
+                word_count = len(text.split())
+                jobs[job_id]["message"] = f"Transcribing... ({word_count} words)"
+
         transcription = transcription_service.transcribe(
             file_path=job["original_path"],
             language=job["language"],
+            progress_callback=update_progress
         )
         job["transcript"] = transcription["text"]
         job["language"] = transcription["language"]

@@ -27,7 +27,8 @@ class YouTubeService:
         
         # Configure yt-dlp
         ydl_opts = {
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4',
             'outtmpl': str(output_path),
             'quiet': True,
             'no_warnings': True,

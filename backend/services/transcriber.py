@@ -6,7 +6,7 @@ import logging
 import subprocess
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Callable
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ class TranscriptionService:
         self, 
         file_path: str | Path,
         language: Optional[str] = None,
-        batch_size: int = 16
+        batch_size: int = 16,
+        progress_callback: Optional[Callable] = None
     ) -> dict:
         """
         Transcribe a video/audio file using Faster-Whisper
@@ -37,12 +38,13 @@ class TranscriptionService:
         
         logger.info(f"Starting transcription for: {file_path.name}")
         
-        return self._transcribe_with_faster_whisper(file_path, language)
+        return self._transcribe_with_faster_whisper(file_path, language, progress_callback)
 
     def _transcribe_with_faster_whisper(
         self,
         file_path: Path,
-        language: Optional[str]
+        language: Optional[str],
+        progress_callback: Optional[Callable] = None
     ) -> dict:
         """Transcribe using Faster-Whisper directly"""
         from faster_whisper import WhisperModel
@@ -79,6 +81,9 @@ class TranscriptionService:
             for segment in segments:
                 text = segment.text.strip()
                 full_text += text + " "
+                
+                if progress_callback:
+                    progress_callback(full_text)
                 
                 # Create sentence entry
                 # Note: faster-whisper segments are roughly sentence-like but not strictly sentences

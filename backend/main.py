@@ -24,6 +24,33 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("Starting ClipAI Backend...")
+    
+    # Ensure directories exist
+    settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    settings.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Cleanup previous session data
+    logger.info("Cleaning up previous session data...")
+    try:
+        # Clean uploads
+        for item in settings.UPLOAD_DIR.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                import shutil
+                shutil.rmtree(item)
+        
+        # Clean outputs
+        for item in settings.OUTPUT_DIR.iterdir():
+            if item.is_file():
+                item.unlink()
+            elif item.is_dir():
+                import shutil
+                shutil.rmtree(item)
+        logger.info("Cleanup complete.")
+    except Exception as e:
+        logger.warning(f"Error during cleanup: {e}")
+
     logger.info(f"Upload directory: {settings.UPLOAD_DIR}")
     logger.info(f"Output directory: {settings.OUTPUT_DIR}")
     yield
