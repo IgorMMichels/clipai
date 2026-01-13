@@ -14,14 +14,35 @@ class ClipFinderService:
     def __init__(self):
         # Heuristic keywords for virality
         self.viral_keywords = {
+            # English
             "amazing": 1.5, "incredible": 1.5, "wow": 2.0, "secret": 1.8,
             "hack": 1.5, "money": 1.2, "viral": 1.5, "crazy": 1.4,
             "best": 1.2, "worst": 1.2, "never": 1.2, "always": 1.2,
             "life hack": 2.0, "tutorial": 1.3, "how to": 1.3,
             "omg": 2.0, "lol": 1.5, "funny": 1.2, "scary": 1.3,
-            "love": 1.2, "hate": 1.2, "stop": 1.3, "wait": 1.4
+            "love": 1.2, "hate": 1.2, "stop": 1.3, "wait": 1.4,
+            "cool": 1.2,
+            
+            # Portuguese
+            "incrível": 1.5, "uau": 2.0, "segredo": 1.8,
+            "hack": 1.5, "dinheiro": 1.2, "viral": 1.5, "loucura": 1.4,
+            "melhor": 1.2, "pior": 1.2, "nunca": 1.2, "sempre": 1.2,
+            "tutorial": 1.3, "como fazer": 1.3,
+            "nossa": 1.5, "engraçado": 1.2, "assustador": 1.3,
+            "amor": 1.2, "ódio": 1.2, "pare": 1.3, "espera": 1.4,
+            "legal": 1.2, "top": 1.3
         }
-    
+        
+        # Emotional words for sentiment analysis
+        self.positive_words = {
+            "good", "great", "awesome", "excellent", "happy", "joy", "success", "win", "beautiful",
+            "bom", "ótimo", "maravilhoso", "excelente", "feliz", "alegria", "sucesso", "ganhar", "lindo"
+        }
+        self.negative_words = {
+            "bad", "terrible", "awful", "sad", "fail", "loss", "ugly", "pain", "death", "danger",
+            "ruim", "terrível", "triste", "falha", "perda", "feio", "dor", "morte", "perigo"
+        }
+
     @property
     def is_available(self) -> bool:
         return True
@@ -138,8 +159,31 @@ class ClipFinderService:
         pace_score = 0.0
         if wps > 2.5: # Fast talker
             pace_score = 5.0
+            
+        # Sentiment/Emotion Bonus (Robust Heuristic)
+        sentiment_score = 0.0
         
-        total_score = base_score + keyword_score + pace_score
+        # 1. Check for emotional words
+        words = set(text_lower.split())
+        pos_hits = len(words.intersection(self.positive_words))
+        neg_hits = len(words.intersection(self.negative_words))
+        
+        if pos_hits > 0 or neg_hits > 0:
+            # Emotion is good for virality, whether positive or negative
+            sentiment_score += min(5.0, (pos_hits + neg_hits) * 2.0)
+            
+        # 2. Check for intensity (CAPS and Exclamations)
+        # Count exclamation marks
+        exc_count = text.count("!")
+        if exc_count > 0:
+            sentiment_score += min(3.0, exc_count * 1.0)
+            
+        # Count uppercase words (longer than 2 chars to avoid 'I', 'A')
+        caps_words = [w for w in text.split() if w.isupper() and len(w) > 2]
+        if len(caps_words) > 0:
+             sentiment_score += min(3.0, len(caps_words) * 1.0)
+        
+        total_score = base_score + keyword_score + pace_score + sentiment_score
         return min(99.9, total_score)
 
     def _remove_overlaps(self, clips: List[dict]) -> List[dict]:

@@ -3,6 +3,7 @@ Video Editor Service
 Handles trimming, resizing, and exporting clips using MoviePy and FFmpeg
 """
 import logging
+import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import subprocess
@@ -101,6 +102,7 @@ class VideoEditorService:
         input_path: str | Path,
         output_path: str | Path,
         crops_data: dict,
+        fps: int = 60,
     ) -> Path:
         """
         Resize a video using crop data (dynamic cropping)
@@ -112,52 +114,54 @@ class VideoEditorService:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Resizing video to {crops_data['crop_width']}x{crops_data['crop_height']}")
+        logger.info(f"Resizing video to {crops_data['crop_width']}x{crops_data['crop_height']} at {fps} fps")
         
         clip = VideoFileClip(str(input_path))
         subclips = []
         
-        segments = crops_data["segments"]
-        cw = crops_data["crop_width"]
-        ch = crops_data["crop_height"]
+        segments = crops_data.get("segments", [])
+        cw = crops_data.get("crop_width", clip.w)
+        ch = crops_data.get("crop_height", clip.h)
         
-        for seg in segments:
-            # Segment times are relative to the start of the trimmed clip (0-based)
-            # or absolute if passed from resizer? 
-            # Resizer receives the trimmed clip, so times are 0-based relative to that clip.
-            start = seg["start_time"]
-            end = seg["end_time"] if seg["end_time"] is not None else clip.duration
-            
-            # Ensure we don't go out of bounds
-            end = min(end, clip.duration)
-            if start >= end:
-                continue
-                
-            # Crop
-            # x, y are top-left coordinates
-            x1 = int(seg["x"])
-            y1 = int(seg["y"])
-            
-            # Crop using moviepy
-            # crop(x1=None, y1=None, x2=None, y2=None, width=None, height=None, x_center=None, y_center=None)
-            sub = clip.subclipped(start, end).cropped(x1=x1, y1=y1, width=cw, height=ch)
-            subclips.append(sub)
-            
-        if not subclips:
-            # Fallback if no segments found
+        if not segments:
              logger.warning("No segments for resizing, doing center crop")
              subclips.append(clip.resized(height=ch).cropped(width=cw, height=ch, x_center=clip.w/2, y_center=clip.h/2))
-
-        final_clip = concatenate_videoclips(subclips)
+        else:
+            for seg in segments:
+                # Segment times are relative to the start of the trimmed clip (0-based)
+                start = seg["start_time"]
+                end = seg["end_time"] if seg.get("end_time") is not None else clip.duration
+                
+                # Ensure we don't go out of bounds
+                end = min(end, clip.duration)
+                if start >= end:
+                    continue
+                    
+                # Crop
+                # x, y are top-left coordinates
+                x1 = int(seg.get("x", 0))
+                y1 = int(seg.get("y", 0))
+                
+                # Crop using moviepy
+                sub = clip.subclipped(start, end).cropped(x1=x1, y1=y1, width=cw, height=ch)
+                subclips.append(sub)
+            
+        if subclips:
+            final_clip = concatenate_videoclips(subclips)
+        else:
+            final_clip = clip.resized(height=ch).cropped(width=cw, height=ch, x_center=clip.w/2, y_center=clip.h/2)
         
         # Write output
         final_clip.write_videofile(
             str(output_path),
+            fps=fps,
             codec="libx264",
             audio_codec="aac",
             temp_audiofile=str(output_path.with_suffix(".m4a")),
             remove_temp=True,
-            logger=None # Silence logger
+            logger=None, # Silence logger
+            preset="medium",
+            bitrate="8000k"
         )
         
         clip.close()
@@ -210,9 +214,11 @@ class VideoEditorService:
         input_path: str | Path,
         output_path: str | Path,
         crops_data: dict,
+        fps: int = 60,
     ) -> Path:
         """
         Apply a stacked layout: Top = Gameplay (centered), Bottom = Face (cropped)
+        Exports at specified FPS (default 60) and FHD (1080x1920)
         """
         from moviepy import VideoFileClip, concatenate_videoclips, CompositeVideoClip, ColorClip
         
@@ -220,7 +226,7 @@ class VideoEditorService:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Applying stacked layout to: {input_path}")
+        logger.info(f"Applying stacked layout to: {input_path} at {fps} fps")
         
         # Load clip
         clip = VideoFileClip(str(input_path))
@@ -236,27 +242,33 @@ class VideoEditorService:
         # 2. Bottom Part: Face Crop
         # Generate the face clip using crops_data
         subclips = []
-        segments = crops_data["segments"]
-        cw = crops_data["crop_width"]
-        ch = crops_data["crop_height"]
+        segments = crops_data.get("segments", [])
+        cw = crops_data.get("crop_width", clip.w)
+        ch = crops_data.get("crop_height", clip.h)
         
-        for seg in segments:
-            start = seg["start_time"]
-            end = seg["end_time"] if seg["end_time"] is not None else clip.duration
-            end = min(end, clip.duration)
-            if start >= end: continue
-            
-            x1 = int(seg["x"])
-            y1 = int(seg["y"])
-            
-            # Crop using moviepy
-            sub = clip.subclipped(start, end).cropped(x1=x1, y1=y1, width=cw, height=ch)
-            subclips.append(sub)
-            
-        if not subclips:
+        # If no segments provided, just use the whole clip centered
+        if not segments:
+             logger.warning("No segments for resizing, using center crop for bottom")
              subclips.append(clip.resized(height=ch).cropped(width=cw, height=ch, x_center=clip.w/2, y_center=clip.h/2))
+        else:
+            for seg in segments:
+                start = seg["start_time"]
+                end = seg["end_time"] if seg.get("end_time") is not None else clip.duration
+                end = min(end, clip.duration)
+                if start >= end: continue
+                
+                x1 = int(seg.get("x", 0))
+                y1 = int(seg.get("y", 0))
+                
+                # Crop using moviepy
+                sub = clip.subclipped(start, end).cropped(x1=x1, y1=y1, width=cw, height=ch)
+                subclips.append(sub)
 
-        face_clip = concatenate_videoclips(subclips)
+        if subclips:
+            face_clip = concatenate_videoclips(subclips)
+        else:
+             # Fallback
+             face_clip = clip.resized(height=ch).cropped(width=cw, height=ch, x_center=clip.w/2, y_center=clip.h/2)
         
         # Resize face_clip to width 1080
         face_clip = face_clip.resized(width=target_w)
@@ -270,11 +282,14 @@ class VideoEditorService:
         
         final.write_videofile(
             str(output_path),
+            fps=fps,
             codec="libx264",
             audio_codec="aac",
             temp_audiofile=str(output_path.with_suffix(".m4a")),
             remove_temp=True,
-            logger=None
+            logger=None,
+            preset="medium",  # Better quality
+            bitrate="8000k"   # High bitrate for FHD
         )
         
         clip.close()
@@ -282,6 +297,102 @@ class VideoEditorService:
         face_clip.close()
         final.close()
         
+        return output_path
+
+
+    def process_viral_clip(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        start_time: float,
+        end_time: float,
+        crops_data: dict,
+        subtitles: List[dict],
+        fps: int = 60
+    ) -> Path:
+        """
+        Full pipeline: Trim -> Stacked Layout (9:16, 60fps) -> Burn Subtitles
+        """
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        
+        # Temporary files
+        temp_trim = output_path.with_name(f"temp_trim_{uuid.uuid4()}{input_path.suffix}")
+        temp_layout = output_path.with_name(f"temp_layout_{uuid.uuid4()}{input_path.suffix}")
+        
+        try:
+            # 1. Trim (Fast cut)
+            # using ffmpeg to trim first saves processing time in moviepy
+            self.trim_clip(input_path, temp_trim, start_time, end_time)
+            
+            # 2. Adjust Data for Trimmed Clip
+            # Crops segments: shift by -start_time
+            adjusted_crops = crops_data.copy()
+            adjusted_segments = []
+            if "segments" in crops_data:
+                for seg in crops_data["segments"]:
+                    # check if segment overlaps with the clip
+                    seg_start = seg["start_time"]
+                    seg_end = seg["end_time"] if seg.get("end_time") is not None else end_time
+                    
+                    if seg_end <= start_time or seg_start >= end_time:
+                        continue
+                        
+                    # Clamp and Shift
+                    new_start = max(0.0, seg_start - start_time)
+                    new_end = min(end_time - start_time, seg_end - start_time)
+                    
+                    new_seg = seg.copy()
+                    new_seg["start_time"] = new_start
+                    new_seg["end_time"] = new_end
+                    adjusted_segments.append(new_seg)
+            
+            adjusted_crops["segments"] = adjusted_segments
+            
+            # Subtitles: shift by -start_time and filter
+            adjusted_subtitles = []
+            for sub in subtitles:
+                sub_start = sub["start_time"]
+                sub_end = sub["end_time"]
+                
+                if sub_end <= start_time or sub_start >= end_time:
+                    continue
+                    
+                new_start = max(0.0, sub_start - start_time)
+                new_end = min(end_time - start_time, sub_end - start_time)
+                
+                new_sub = sub.copy()
+                new_sub["start_time"] = new_start
+                new_sub["end_time"] = new_end
+                adjusted_subtitles.append(new_sub)
+
+            # 3. Apply Layout
+            # result is saved to temp_layout
+            self.apply_stacked_layout(
+                input_path=temp_trim,
+                output_path=temp_layout,
+                crops_data=adjusted_crops,
+                fps=fps
+            )
+            
+            # 4. Burn Subtitles
+            # result is saved to output_path
+            self.add_subtitles(
+                video_path=temp_layout,
+                output_path=output_path,
+                subtitles=adjusted_subtitles
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing viral clip: {e}")
+            raise e
+        finally:
+            # Cleanup
+            if temp_trim.exists():
+                temp_trim.unlink()
+            if temp_layout.exists():
+                temp_layout.unlink()
+                
         return output_path
 
     def _create_srt(self, subtitles: List[dict], output_path: Path):

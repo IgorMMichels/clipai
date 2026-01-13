@@ -151,24 +151,65 @@ async def process_export(
                         input_path=clip_path,
                         output_path=resized_path,
                         crops_data=crops,
+                        fps=60  # Force 60fps for viral
                     )
                 else:
                     video_editor_service.resize_video(
                         input_path=clip_path,
                         output_path=resized_path,
                         crops_data=crops,
+                        fps=60  # Force 60fps
                     )
                 clip_path = resized_path
             
             # Step 3: Add subtitles (if requested)
             if request.add_subtitles:
                 subtitled_path = output_dir / f"clip_{i+1}_subtitled.mp4"
-                # Create subtitle entries from words
-                subtitles = [{"text": clip["transcript"], "start_time": 0, "end_time": clip["duration"]}]
+                
+                # Extract actual subtitles from full transcription
+                full_transcription = job.get("transcription", {})
+                source_words = full_transcription.get("words", [])
+                
+                # If no words, fallback to sentences, else fallback to full text
+                subtitles = []
+                if source_words:
+                    # Use words for "live" feel (karaoke style or just fast paced)
+                    # Ideally we group words into short phrases (captions)
+                    # For now, let's just use words or sentences. 
+                    # "Viral" usually means 1-3 words per chunk.
+                    # Let's use the words directly? Or better, group them.
+                    # For simplicity/robustness, let's use words but maybe checking sentences is safer?
+                    # Let's use sentences but cut them if they are too long?
+                    # Actually, let's just use the words.
+                    
+                    for w in source_words:
+                        if w["end_time"] > clip["start_time"] and w["start_time"] < clip["end_time"]:
+                            sub = {
+                                "text": w["text"],
+                                "start_time": max(0.0, w["start_time"] - clip["start_time"]),
+                                "end_time": min(clip["duration"], w["end_time"] - clip["start_time"])
+                            }
+                            subtitles.append(sub)
+                elif full_transcription.get("sentences"):
+                    for s in full_transcription["sentences"]:
+                        if s["end_time"] > clip["start_time"] and s["start_time"] < clip["end_time"]:
+                            sub = {
+                                "text": s["text"],
+                                "start_time": max(0.0, s["start_time"] - clip["start_time"]),
+                                "end_time": min(clip["duration"], s["end_time"] - clip["start_time"])
+                            }
+                            subtitles.append(sub)
+                else:
+                    # Fallback
+                    subtitles = [{"text": clip["transcript"], "start_time": 0, "end_time": clip["duration"]}]
+                
                 video_editor_service.add_subtitles(
                     video_path=clip_path,
                     output_path=subtitled_path,
                     subtitles=subtitles,
+                    font_size=50, # Bigger for viral
+                    font_color="yellow", # Classic viral color
+                    outline_color="black"
                 )
                 clip_path = subtitled_path
             
