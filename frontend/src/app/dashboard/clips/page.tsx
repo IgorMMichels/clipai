@@ -224,7 +224,7 @@ export default function ClipsPage() {
         </div>
         
         <div className="flex items-center gap-3">
-            <Button 
+            <Button
                 variant={useStackedLayout ? "default" : "outline"}
                 onClick={() => setUseStackedLayout(!useStackedLayout)}
                 className={useStackedLayout ? "bg-purple-600 hover:bg-purple-700" : ""}
@@ -232,10 +232,20 @@ export default function ClipsPage() {
                 {useStackedLayout ? "Stacked Layout (Facecam)" : "Default Layout"}
             </Button>
 
-            {clips.length > 0 && (
-              <Button className="glow-purple">
+            {job?.transcript && (
+              <Button
+                onClick={() => {
+                  const blob = new Blob([job.transcript], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${job.filename.replace(/\.[^/.]+$/, "")}_transcript.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
                 <Download className="h-4 w-4 mr-2" />
-                Export All
+                Download Transcript
               </Button>
             )}
         </div>
@@ -315,7 +325,24 @@ export default function ClipsPage() {
           transition={{ delay: 0.3 }}
         >
           <GlowingCard className="p-6" glowColor="purple">
-            <h3 className="font-semibold mb-4">Full Transcript</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Full Transcript</h3>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const blob = new Blob([job.transcript], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${job.filename.replace(/\.[^/.]+$/, "")}_transcript.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            </div>
             <div className="max-h-64 overflow-y-auto">
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                 {job.transcript}
@@ -324,7 +351,7 @@ export default function ClipsPage() {
           </GlowingCard>
         </motion.div>
       )}
-      
+
       <PreviewModal
         isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}

@@ -155,32 +155,30 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
   // Export with progress tracking
   const handleExport = async () => {
     if (exporting) return;
-    
+
     setExporting(true);
     setExportProgress(0);
     setExportMessage("Starting export...");
     setDownloadUrl(null);
-    
+
     try {
-      // Start export
       const response = await fetch(`http://localhost:8000/api/clips/${jobId}/export/${clip.id}`, {
         method: "POST",
       });
-      
+
       if (!response.ok) throw new Error("Failed to start export");
-      
+
       const data = await response.json();
-      
-      // Poll for progress
+
       const pollProgress = async () => {
         try {
           const statusRes = await fetch(`http://localhost:8000/api/clips/export/${data.export_id}/status`);
           if (!statusRes.ok) return;
-          
+
           const status = await statusRes.json();
           setExportProgress(status.progress);
           setExportMessage(status.message);
-          
+
           if (status.status === "completed") {
             setExporting(false);
             setDownloadUrl(status.download_url);
@@ -188,7 +186,6 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
             setExporting(false);
             setExportMessage("Export failed");
           } else {
-            // Continue polling
             setTimeout(pollProgress, 500);
           }
         } catch (e) {
@@ -196,9 +193,9 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
           setTimeout(pollProgress, 1000);
         }
       };
-      
+
       pollProgress();
-      
+
     } catch (error) {
       console.error("Export error:", error);
       setExporting(false);
