@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from config import settings
-from api.routes import upload_router, clips_router
+from api.routes import upload_router, clips_router, storage_router
 
 
 # Configure logging
@@ -29,28 +29,9 @@ async def lifespan(app: FastAPI):
     settings.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     settings.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Cleanup previous session data
-    logger.info("Cleaning up previous session data...")
-    try:
-        # Clean uploads
-        for item in settings.UPLOAD_DIR.iterdir():
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                import shutil
-                shutil.rmtree(item)
-        
-        # Clean outputs
-        for item in settings.OUTPUT_DIR.iterdir():
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                import shutil
-                shutil.rmtree(item)
-        logger.info("Cleanup complete.")
-    except Exception as e:
-        logger.warning(f"Error during cleanup: {e}")
-
+    # NOTE: We no longer auto-cleanup on startup to preserve user files
+    # Users can manually clear storage via the Storage Manager UI
+    
     logger.info(f"Upload directory: {settings.UPLOAD_DIR}")
     logger.info(f"Output directory: {settings.OUTPUT_DIR}")
     yield
@@ -80,6 +61,7 @@ app.mount("/outputs", StaticFiles(directory=str(settings.OUTPUT_DIR)), name="out
 # Include routers
 app.include_router(upload_router, prefix="/api")
 app.include_router(clips_router, prefix="/api")
+app.include_router(storage_router, prefix="/api")
 
 
 @app.get("/")
