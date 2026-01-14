@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import List, Optional
 import uuid
+import subprocess
 
 from config import settings
 from models.schemas import ClipExportRequest, ProcessingStatus
@@ -278,6 +279,57 @@ async def download_clip(export_id: str, clip_index: int):
     )
 
 
+@router.get("/{job_id}/thumbnail/{clip_id}")
+async def get_thumbnail(job_id: str, clip_id: str):
+    """Generate and return a thumbnail for a specific clip"""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    clip = next((c for c in job["clips"] if c["id"] == clip_id), None)
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    
+    # Define output path
+    output_dir = settings.OUTPUT_DIR / job_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    thumbnail_path = output_dir / f"thumb_{clip_id}.jpg"
+    
+    # Return existing if available
+    if thumbnail_path.exists():
+        return FileResponse(thumbnail_path, media_type="image/jpeg")
+    
+    try:
+        video_path = Path(job["original_path"])
+        
+        # Extract frame from clip midpoint
+        midpoint = clip["start_time"] + (clip["duration"] / 2)
+        
+        # Use FFmpeg to extract a frame with 9:16 crop
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(midpoint),
+            "-i", str(video_path),
+            "-vframes", "1",
+            "-vf", "scale='if(gt(iw/ih,9/16),-1,720)':'if(gt(iw/ih,9/16),1280,-1)',crop=720:1280",
+            "-q:v", "2",
+            str(thumbnail_path)
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True)
+        
+        if thumbnail_path.exists():
+            return FileResponse(thumbnail_path, media_type="image/jpeg")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/{job_id}/preview/{clip_id}")
 async def generate_preview(
     job_id: str, 
@@ -358,6 +410,7 @@ async def generate_preview(
                 start_time=clip["start_time"],
                 end_time=clip["end_time"],
                 aspect_ratio=(aspect_ratio_w, aspect_ratio_h),
+                subtitles=subtitles if with_subtitles else None,
             )
         
         return {"url": f"/outputs/{job_id}/{output_filename}", "status": "ready"}
