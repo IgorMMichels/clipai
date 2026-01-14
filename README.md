@@ -1,190 +1,198 @@
 # ClipAI
 
-AI-powered video clipping tool that transforms long videos into viral clips.
+**AI-powered video clipping and transcription tool.**  
+Transform long videos into viral clips, generate intelligent summaries, and transcribe content from 30+ platforms.
 
-![ClipAI](https://img.shields.io/badge/ClipAI-Open%20Source-purple)
-![License](https://img.shields.io/badge/License-MIT-green)
+![ClipAI](https://img.shields.io/badge/ClipAI-v1.1-purple?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.11+-blue?style=for-the-badge)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-teal?style=for-the-badge)
 
-## Features
+## 🚀 Features
 
-- **AI Clip Detection** - Automatically finds engaging moments using TextTiling algorithm
-- **Smart Resizing** - Convert 16:9 to 9:16 with speaker tracking
-- **Transcription** - Word-level timestamps with WhisperX
-- **AI Descriptions** - Generate viral captions in English & Portuguese
-- **Effects & Music** - Add background music, transitions, subtitles
-- **Batch Processing** - Process multiple videos in queue
+### 🎬 Video Clipping (Core)
+- **AI Clip Detection** - Automatically finds engaging viral moments using semantic analysis.
+- **Smart Resizing** - Converts landscape (16:9) video to portrait (9:16) with active speaker tracking.
+- **Facecam Detection** - Intelligent layout handling for gaming/streaming videos.
+- **Viral Captions** - Generates social media descriptions and hashtags using AI (Gemini/OpenAI/Anthropic).
+- **Video Editor** - Trimming, resizing, and burning subtitles.
 
-## Tech Stack
+### 📝 AI Transcriber (New in v1.1)
+- **Multi-Platform Download** - Supports **30+ platforms** including YouTube, TikTok, Instagram, Twitter/X, Bilibili, Vimeo, and more.
+- **High-Accuracy Transcription** - Uses **Faster-Whisper** with VAD filtering for precise word-level timestamps.
+- **AI Text Optimization** - Automatically fixes typos, punctuation, and grammar using LLMs.
+- **Intelligent Summarization** - Generates comprehensive summaries, key points, and topic lists in **20+ languages**.
+- **Translation Service** - Translates transcripts between languages with auto-detection.
+- **Real-Time Progress** - Live progress tracking via Server-Sent Events (SSE).
+- **Export Formats** - Download results in Markdown, SRT, VTT, and JSON.
 
-- **Frontend**: Next.js 15, React, TailwindCSS, shadcn/ui, Framer Motion
-- **Backend**: FastAPI, Python 3.11
-- **AI/ML**: ClipsAI, WhisperX, Pyannote, OpenAI/Anthropic
-- **Processing**: FFmpeg, MoviePy
+---
 
-## Quick Start
+## 🛠️ Tech Stack
+
+- **Backend**: FastAPI, Python 3.11+
+- **Frontend**: Next.js 15, React, TailwindCSS, shadcn/ui
+- **AI/ML**: 
+  - **Transcription**: Faster-Whisper
+  - **LLMs**: Google Gemini 2.0, OpenAI GPT-4o, Anthropic Claude
+  - **Embeddings**: Sentence-Transformers
+  - **Vision**: OpenCV, MediaPipe (Face detection)
+- **Processing**: FFmpeg, MoviePy, yt-dlp
+
+---
+
+## ⚡ Quick Start
 
 ### Prerequisites
-
 - Python 3.11+
 - Node.js 20+
-- FFmpeg
+- FFmpeg (must be installed on your system)
 - libmagic
 
 ### Installation
 
 1. **Clone the repository**
-```bash
-git clone https://github.com/yourusername/clipai.git
-cd clipai
-```
+   ```bash
+   git clone https://github.com/yourusername/clipai.git
+   cd clipai
+   ```
 
 2. **Setup Backend**
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install whisperx@git+https://github.com/m-bain/whisperx.git
-
-# Copy environment file
-cp .env.example .env
-# Edit .env and add your API keys
-
-# Run the server
-uvicorn main:app --reload
-```
+   ```bash
+   cd backend
+   
+   # Create virtual environment
+   python -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Setup environment variables
+   cp .env.example .env
+   # Edit .env with your API keys (OPENAI_API_KEY, GOOGLE_API_KEY, etc.)
+   
+   # Run the server
+   uvicorn main:app --reload
+   ```
 
 3. **Setup Frontend**
+   ```bash
+   cd frontend
+   
+   # Install dependencies
+   npm install
+   
+   # Run development server
+   npm run dev
+   ```
+
+4. **Access the Application**
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:8000`
+   - API Docs: `http://localhost:8000/docs`
+
+### 🐳 Using Docker
+
 ```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run the development server
-npm run dev
-```
-
-4. **Open the app**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-### Using Docker
-
-```bash
-# Copy environment file
+# Copy env file
 cp backend/.env.example backend/.env
 
-# Start all services
+# Start services
 docker-compose up -d
 
 # View logs
 docker-compose logs -f
 ```
 
-## Configuration
+---
 
-### Required API Keys
+## 📖 API Documentation
 
-| Key | Purpose | Get From |
-|-----|---------|----------|
-| `HUGGINGFACE_TOKEN` | Video resizing (Pyannote) | [HuggingFace](https://huggingface.co/settings/tokens) |
+### 1. Transcription & Summary API (Standalone)
 
-### Optional API Keys
+**Transcribe from URL (30+ platforms supported):**
+```http
+POST /api/transcribe/url
+Content-Type: application/json
 
-| Key | Purpose | Get From |
-|-----|---------|----------|
-| `OPENAI_API_KEY` | AI descriptions | [OpenAI](https://platform.openai.com/api-keys) |
-| `ANTHROPIC_API_KEY` | AI descriptions (alternative) | [Anthropic](https://console.anthropic.com/) |
-
-## API Endpoints
-
-### Upload
-
-```bash
-POST /api/upload/
-# Upload a video for processing
-
-GET /api/upload/status/{job_id}
-# Get processing status
-
-GET /api/upload/job/{job_id}
-# Get full job details with clips
+{
+  "url": "https://www.youtube.com/watch?v=...",
+  "language": "en",           // Optional: Source language (auto-detect if null)
+  "generate_summary": true,   // Generate AI summary
+  "summary_language": "es",   // Optional: Output summary in Spanish
+  "generate_translation": true,
+  "translation_language": "es"
+}
 ```
 
-### Clips
+**Transcribe from File:**
+```http
+POST /api/transcribe/file
+Content-Type: multipart/form-data
 
-```bash
+file: (binary video/audio file)
+generate_summary: true
+```
+
+**Stream Progress (SSE):**
+```http
+GET /api/transcribe/stream/{job_id}
+```
+
+**Get Results:**
+```http
+GET /api/transcribe/result/{job_id}
+```
+
+**Export:**
+```http
+GET /api/transcribe/export/{job_id}  // Download Markdown
+```
+
+### 2. Video Clipping API
+
+**Upload & Process:**
+```http
+POST /api/upload/url
+Content-Type: application/json
+
+{
+  "url": "https://www.tiktok.com/@user/video/...",
+  "aspect_ratio": [9, 16],
+  "generate_description": true,
+  "generate_summary": true
+}
+```
+
+**Get Detected Clips:**
+```http
 GET /api/clips/{job_id}
-# Get all clips for a job
-
-POST /api/clips/{job_id}/export
-# Export selected clips
-
-GET /api/clips/download/{export_id}/{clip_index}
-# Download an exported clip
 ```
-
-## Project Structure
-
-```
-clipai/
-├── backend/
-│   ├── api/
-│   │   └── routes/
-│   │       ├── upload.py      # Upload endpoints
-│   │       └── clips.py       # Clips endpoints
-│   ├── services/
-│   │   ├── transcriber.py     # WhisperX transcription
-│   │   ├── clipper.py         # Clip detection
-│   │   ├── resizer.py         # Video resizing
-│   │   ├── editor.py          # Video editing
-│   │   ├── description.py     # AI descriptions
-│   │   └── effects.py         # Effects/music
-│   ├── models/
-│   │   └── schemas.py         # Pydantic models
-│   ├── config.py              # Settings
-│   └── main.py                # FastAPI app
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx           # Landing page
-│   │   │   └── dashboard/         # Dashboard pages
-│   │   └── components/
-│   │       └── ui/                # UI components
-│   └── package.json
-├── docker-compose.yml
-└── README.md
-```
-
-## How It Works
-
-1. **Upload** - User uploads a video through the web interface
-2. **Transcribe** - WhisperX transcribes with word-level timestamps
-3. **Find Clips** - TextTiling algorithm detects topic boundaries
-4. **Generate Descriptions** - LLM creates viral captions
-5. **Export** - Resize, add effects, and download clips
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Credits
-
-- [ClipsAI](https://github.com/ClipsAI/clipsai) - Core clipping library
-- [WhisperX](https://github.com/m-bain/whisperX) - Transcription
-- [Pyannote](https://github.com/pyannote/pyannote-audio) - Speaker diarization
-- [shadcn/ui](https://ui.shadcn.com/) - UI components
 
 ---
 
-Built with AI by the ClipAI team.
+## 🌍 Supported Platforms & Languages
+
+### Video Platforms
+Supports downloading from **30+ sites** including:
+- YouTube, TikTok, Instagram, Facebook, Twitter/X
+- Bilibili, Vimeo, Twitch, Reddit, LinkedIn
+- Pinterest, Tumblr, SoundCloud, and many more.
+
+### Summary Languages
+English, Chinese (Simplified/Traditional), Japanese, Korean, Spanish, French, German, Portuguese, Russian, Arabic, Hindi, Italian, Dutch, Polish, Turkish, Vietnamese, Thai, Indonesian, Malay, Ukrainian.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting PRs.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+**Built with ❤️ by the ClipAI Team.**
