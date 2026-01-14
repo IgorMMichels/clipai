@@ -1,9 +1,0 @@
-{
-  "active": true,
-  "iteration": 1,
-  "maxIterations": 20,
-  "completionPromise": "COMPLETE",
-  "prompt": "the ai should be able to understand where is a facecam on the video and then put a cut with facecam and video on top of it to make a better video, also, make auto subscriptions inside the video using ai so that it shows what the person is saying.\\  Output <promise>COMPLETE FUNCTIONAL PLATFORM WITH VIDEO PREVIEW INSIDE THE WEBSITE AND HIGH QUALITY CKUOS WITH GOOD CUTS CATCHING THE PEOPLE AND LIVE TRANSCRIPTION</promise> when all tests pass.",
-  "startedAt": "2026-01-13T22:41:42.091Z",
-  "model": ""
-}

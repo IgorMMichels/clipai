@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import List, Optional
 import uuid
 import subprocess
+import time
+import os
+import json
+from datetime import datetime, timedelta
 
 from config import settings
 from models.schemas import ClipExportRequest, ProcessingStatus
@@ -18,6 +22,72 @@ from api.routes.upload import jobs
 
 # Export jobs storage
 export_jobs = {}
+
+# Local DB path for persistence
+DB_PATH = settings.BASE_DIR / "data" / "clipai.json"
+
+
+def load_db():
+    """Load local database"""
+    if DB_PATH.exists():
+        try:
+            with open(DB_PATH, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"exports": {}, "created_at": {}}
+
+
+def save_db(data):
+    """Save local database"""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DB_PATH, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def cleanup_old_files():
+    """Remove files older than 1 week"""
+    one_week_ago = datetime.now() - timedelta(days=7)
+    cleaned_count = 0
+    
+    # Clean outputs directory
+    if settings.OUTPUT_DIR.exists():
+        for job_dir in settings.OUTPUT_DIR.iterdir():
+            if job_dir.is_dir():
+                try:
+                    # Check modification time
+                    mtime = datetime.fromtimestamp(job_dir.stat().st_mtime)
+                    if mtime < one_week_ago:
+                        # Remove entire directory
+                        import shutil
+                        shutil.rmtree(job_dir)
+                        cleaned_count += 1
+                except Exception as e:
+                    print(f"Error cleaning {job_dir}: {e}")
+    
+    # Clean uploads directory
+    if settings.UPLOAD_DIR.exists():
+        for file in settings.UPLOAD_DIR.iterdir():
+            try:
+                mtime = datetime.fromtimestamp(file.stat().st_mtime)
+                if mtime < one_week_ago:
+                    if file.is_file():
+                        file.unlink()
+                    elif file.is_dir():
+                        import shutil
+                        shutil.rmtree(file)
+                    cleaned_count += 1
+            except Exception as e:
+                print(f"Error cleaning {file}: {e}")
+    
+    return cleaned_count
+
+
+@router.post("/cleanup")
+async def run_cleanup():
+    """Manually trigger cleanup of old files"""
+    cleaned = cleanup_old_files()
+    return {"message": f"Cleaned up {cleaned} old files/directories"}
 
 
 @router.get("/{job_id}")
@@ -42,6 +112,178 @@ async def get_clips(job_id: str):
     }
 
 
+@router.post("/{job_id}/export/{clip_id}")
+async def export_single_clip(
+    job_id: str,
+    clip_id: str,
+    background_tasks: BackgroundTasks,
+):
+    """Export a single clip with high quality settings"""
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job["status"] != ProcessingStatus.COMPLETED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job not completed. Status: {job['status']}"
+        )
+    
+    clip = next((c for c in job["clips"] if c["id"] == clip_id), None)
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    
+    # Create export job
+    export_id = str(uuid.uuid4())
+    export_jobs[export_id] = {
+        "id": export_id,
+        "source_job_id": job_id,
+        "clip_id": clip_id,
+        "status": ProcessingStatus.PROCESSING,
+        "progress": 0,
+        "progress_message": "Starting export...",
+        "output_path": None,
+        "started_at": time.time(),
+    }
+    
+    # Start export in background
+    background_tasks.add_task(
+        process_single_export,
+        export_id,
+        job,
+        clip,
+    )
+    
+    return {
+        "export_id": export_id,
+        "status": "started",
+        "message": f"Exporting clip",
+    }
+
+
+async def process_single_export(export_id: str, job: dict, clip: dict):
+    """Background task to export a single clip with high quality"""
+    from services import video_editor_service
+    
+    export = export_jobs.get(export_id)
+    if not export:
+        return
+    
+    try:
+        video_path = Path(job["original_path"])
+        output_dir = settings.OUTPUT_DIR / job["id"]
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Final output path
+        safe_name = f"clip_{clip['id'][:8]}_export.mp4"
+        output_path = output_dir / safe_name
+        
+        export["progress"] = 10
+        export["progress_message"] = "Trimming video..."
+        
+        # Get facecam and subtitles
+        facecam_region = job.get("facecam_region")
+        transcription = job.get("transcription", {})
+        words = transcription.get("words", [])
+        
+        # Build subtitles
+        subtitles = []
+        if words:
+            for w in words:
+                if w["end_time"] > clip["start_time"] and w["start_time"] < clip["end_time"]:
+                    subtitles.append({
+                        "text": w["text"],
+                        "start_time": w["start_time"],
+                        "end_time": w["end_time"]
+                    })
+        else:
+            subtitles = [{
+                "text": clip.get("transcript", ""),
+                "start_time": clip["start_time"],
+                "end_time": clip["end_time"]
+            }]
+        
+        export["progress"] = 30
+        export["progress_message"] = "Applying effects..."
+        
+        # Use high quality export with PiP if available
+        if facecam_region:
+            export["progress_message"] = "Processing with PiP layout..."
+            video_editor_service.process_viral_clip_with_pip(
+                input_path=video_path,
+                output_path=output_path,
+                start_time=clip["start_time"],
+                end_time=clip["end_time"],
+                facecam_region=facecam_region,
+                subtitles=subtitles,
+                pip_position=facecam_region.get("is_corner", "bottom-right"),
+                pip_scale=0.3,
+                fps=60  # High quality 60fps
+            )
+        else:
+            export["progress_message"] = "Rendering high quality video..."
+            # Simple high quality export
+            video_editor_service.generate_preview(
+                input_path=video_path,
+                output_path=output_path,
+                start_time=clip["start_time"],
+                end_time=clip["end_time"],
+                aspect_ratio=(9, 16),
+                subtitles=subtitles,
+            )
+        
+        export["progress"] = 100
+        export["progress_message"] = "Export complete!"
+        export["status"] = ProcessingStatus.COMPLETED
+        export["output_path"] = str(output_path)
+        export["download_url"] = f"/outputs/{job['id']}/{safe_name}"
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        export["status"] = ProcessingStatus.FAILED
+        export["progress_message"] = f"Export failed: {str(e)}"
+
+
+@router.get("/export/{export_id}/status")
+async def get_export_status(export_id: str):
+    """Get export job status with progress"""
+    export = export_jobs.get(export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="Export job not found")
+    
+    return {
+        "id": export["id"],
+        "status": export["status"],
+        "progress": export["progress"],
+        "message": export["progress_message"],
+        "output_path": export.get("output_path"),
+        "download_url": export.get("download_url"),
+    }
+
+
+@router.get("/export/{export_id}/download")
+async def download_exported_clip(export_id: str):
+    """Download an exported clip"""
+    export = export_jobs.get(export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="Export job not found")
+    
+    if export["status"] != ProcessingStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Export not completed")
+    
+    file_path = Path(export["output_path"])
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(
+        path=file_path,
+        filename=f"clip_export_{export_id[:8]}.mp4",
+        media_type="video/mp4",
+    )
+
+
 @router.post("/{job_id}/export")
 async def export_clips(
     job_id: str,
@@ -49,12 +291,7 @@ async def export_clips(
     request: ClipExportRequest,
 ):
     """
-    Export selected clips with options
-    
-    - Resize to aspect ratio
-    - Add music
-    - Burn subtitles
-    - Generate descriptions
+    Export selected clips with options (legacy endpoint)
     """
     job = jobs.get(job_id)
     if not job:
@@ -73,7 +310,7 @@ async def export_clips(
         "source_job_id": job_id,
         "status": ProcessingStatus.PENDING,
         "progress": 0,
-        "message": "Export started",
+        "progress_message": "Export started",
         "clip_ids": request.clip_ids,
         "options": request.model_dump(),
         "outputs": [],
@@ -116,7 +353,7 @@ async def process_export(
             if not clip:
                 continue
             
-            export["message"] = f"Processing clip {i+1}/{total_clips}"
+            export["progress_message"] = f"Processing clip {i+1}/{total_clips}"
             export["progress"] = int((i / total_clips) * 100)
             
             # Create output directory
@@ -171,18 +408,8 @@ async def process_export(
                 full_transcription = job.get("transcription", {})
                 source_words = full_transcription.get("words", [])
                 
-                # If no words, fallback to sentences, else fallback to full text
                 subtitles = []
                 if source_words:
-                    # Use words for "live" feel (karaoke style or just fast paced)
-                    # Ideally we group words into short phrases (captions)
-                    # For now, let's just use words or sentences. 
-                    # "Viral" usually means 1-3 words per chunk.
-                    # Let's use the words directly? Or better, group them.
-                    # For simplicity/robustness, let's use words but maybe checking sentences is safer?
-                    # Let's use sentences but cut them if they are too long?
-                    # Actually, let's just use the words.
-                    
                     for w in source_words:
                         if w["end_time"] > clip["start_time"] and w["start_time"] < clip["end_time"]:
                             sub = {
@@ -208,8 +435,8 @@ async def process_export(
                     video_path=clip_path,
                     output_path=subtitled_path,
                     subtitles=subtitles,
-                    font_size=50, # Bigger for viral
-                    font_color="yellow", # Classic viral color
+                    font_size=50,
+                    font_color="yellow",
                     outline_color="black"
                 )
                 clip_path = subtitled_path
@@ -236,21 +463,11 @@ async def process_export(
         
         export["status"] = ProcessingStatus.COMPLETED
         export["progress"] = 100
-        export["message"] = f"Exported {len(export['outputs'])} clips"
+        export["progress_message"] = f"Exported {len(export['outputs'])} clips"
         
     except Exception as e:
         export["status"] = ProcessingStatus.FAILED
-        export["message"] = f"Export failed: {str(e)}"
-
-
-@router.get("/export/{export_id}")
-async def get_export_status(export_id: str):
-    """Get export job status"""
-    export = export_jobs.get(export_id)
-    if not export:
-        raise HTTPException(status_code=404, detail="Export job not found")
-    
-    return export
+        export["progress_message"] = f"Export failed: {str(e)}"
 
 
 @router.get("/download/{export_id}/{clip_index}")
@@ -303,27 +520,34 @@ async def get_thumbnail(job_id: str, clip_id: str):
     try:
         video_path = Path(job["original_path"])
         
+        if not video_path.exists():
+            raise HTTPException(status_code=404, detail="Source video not found")
+        
         # Extract frame from clip midpoint
         midpoint = clip["start_time"] + (clip["duration"] / 2)
         
-        # Use FFmpeg to extract a frame with 9:16 crop
+        # Simpler FFmpeg command - just extract frame and scale
         cmd = [
             "ffmpeg", "-y",
             "-ss", str(midpoint),
             "-i", str(video_path),
             "-vframes", "1",
-            "-vf", "scale='if(gt(iw/ih,9/16),-1,720)':'if(gt(iw/ih,9/16),1280,-1)',crop=720:1280",
-            "-q:v", "2",
+            "-vf", "scale=360:-1",  # Scale width to 360, auto height
+            "-q:v", "3",
             str(thumbnail_path)
         ]
         
-        result = subprocess.run(cmd, capture_output=True)
+        result = subprocess.run(cmd, capture_output=True, timeout=30)
         
         if thumbnail_path.exists():
             return FileResponse(thumbnail_path, media_type="image/jpeg")
         else:
+            # Log the error
+            print(f"FFmpeg stderr: {result.stderr.decode()}")
             raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
             
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Thumbnail generation timed out")
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -419,3 +643,11 @@ async def generate_preview(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# Run cleanup on module load (optional - once per server start)
+try:
+    cleaned = cleanup_old_files()
+    if cleaned > 0:
+        print(f"[Startup] Cleaned up {cleaned} old files/directories")
+except Exception as e:
+    print(f"[Startup] Cleanup error: {e}")

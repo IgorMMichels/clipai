@@ -21,22 +21,22 @@ class VideoEditorService:
         start_time: float,
         end_time: float,
         aspect_ratio: tuple[int, int] = (9, 16),
+        subtitles: Optional[List[dict]] = None,
     ) -> Path:
         """
-        Generate a fast, low-quality preview clip using FFmpeg
+        Generate a fast preview clip with optional viral-style subtitles
         """
         input_path = Path(input_path)
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Calculate dimensions (approximate 360p base)
+        # Calculate dimensions (720p for reasonable preview quality)
         target_w, target_h = aspect_ratio
-        # Keep it small for preview
         if target_h > target_w:
-            h = 640
+            h = 1280  # 720p height for vertical
             w = int(h * (target_w / target_h))
         else:
-            w = 640
+            w = 1280
             h = int(w * (target_h / target_w))
             
         w = w if w % 2 == 0 else w + 1
@@ -44,9 +44,20 @@ class VideoEditorService:
         
         duration = end_time - start_time
         
-        # Center crop filter
-        # scale to cover, then crop
-        vf = f"scale='if(gt(iw/ih,{w}/{h}),-1,{w})':'if(gt(iw/ih,{w}/{h}),{h},-1)',crop={w}:{h}"
+        # Build filter chain
+        # Scale to cover, then crop
+        vf_parts = [f"scale='if(gt(iw/ih,{w}/{h}),-1,{w})':'if(gt(iw/ih,{w}/{h}),{h},-1)'", f"crop={w}:{h}"]
+        
+        # Add subtitles if provided
+        ass_path = None
+        if subtitles and len(subtitles) > 0:
+            ass_path = output_path.with_suffix(".ass")
+            self._create_viral_ass(subtitles, ass_path, start_time, w, h)
+            # Escape path for FFmpeg filter
+            ass_path_escaped = str(ass_path).replace("\\", "/").replace(":", "\\:")
+            vf_parts.append(f"ass='{ass_path_escaped}'")
+        
+        vf = ",".join(vf_parts)
         
         cmd = [
             "ffmpeg", "-y",
@@ -55,15 +66,70 @@ class VideoEditorService:
             "-t", str(duration),
             "-vf", vf,
             "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "30",
+            "-preset", "fast",
+            "-crf", "23",
             "-c:a", "aac",
             str(output_path)
         ]
         
-        logger.info(f"Generating preview: {output_path}")
-        subprocess.run(cmd, check=True, capture_output=True)
+        logger.info(f"Generating preview with subtitles: {output_path}")
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"FFmpeg error: {e.stderr.decode()}")
+            raise
+        finally:
+            # Cleanup ASS file
+            if ass_path and ass_path.exists():
+                ass_path.unlink()
+        
         return output_path
+    
+    def _create_viral_ass(self, subtitles: List[dict], output_path: Path, offset: float, width: int, height: int):
+        """Create viral-style ASS subtitles with word-by-word highlighting"""
+        def format_time(seconds: float) -> str:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            cs = int((seconds % 1) * 100)
+            return f"{hours:1d}:{minutes:02d}:{secs:02d}.{cs:02d}"
+        
+        # Scale font size based on resolution
+        font_size = max(40, int(height / 20))
+        margin_v = int(height * 0.12)  # 12% from bottom
+        
+        header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {width}
+PlayResY: {height}
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Viral,Arial Black,{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,20,20,{margin_v},1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+        # Viral style: White text, black outline (4px), slight shadow
+        # PrimaryColour &H00FFFFFF = white
+        # OutlineColour &H00000000 = black  
+        # BackColour &H80000000 = semi-transparent black shadow
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(header)
+            for sub in subtitles:
+                # Adjust time relative to clip start
+                start = max(0, sub['start_time'] - offset)
+                end = max(0, sub['end_time'] - offset)
+                
+                if end <= 0 or start >= end:
+                    continue
+                
+                start_str = format_time(start)
+                end_str = format_time(end)
+                text = sub['text'].upper()  # Viral style is usually uppercase
+                
+                f.write(f"Dialogue: 0,{start_str},{end_str},Viral,,0,0,0,,{text}\n")
 
     def trim_clip(
         self,
