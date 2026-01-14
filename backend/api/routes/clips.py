@@ -205,8 +205,8 @@ async def process_single_export(export_id: str, job: dict, clip: dict):
         
         export["progress"] = 30
         export["progress_message"] = "Applying effects..."
-        
-        # Use high quality export with PiP if available
+
+        # Use high quality export with PiP if available (NO subtitles)
         if facecam_region:
             export["progress_message"] = "Processing with PiP layout..."
             video_editor_service.process_viral_clip_with_pip(
@@ -215,7 +215,7 @@ async def process_single_export(export_id: str, job: dict, clip: dict):
                 start_time=clip["start_time"],
                 end_time=clip["end_time"],
                 facecam_region=facecam_region,
-                subtitles=subtitles,
+                subtitles=[],  # No subtitles
                 pip_position=facecam_region.get("is_corner", "bottom-right"),
                 pip_scale=0.3,
                 fps=60  # High quality 60fps
@@ -229,7 +229,7 @@ async def process_single_export(export_id: str, job: dict, clip: dict):
                 start_time=clip["start_time"],
                 end_time=clip["end_time"],
                 aspect_ratio=(9, 16),
-                subtitles=subtitles,
+                subtitles=None,  # No subtitles
             )
         
         export["progress"] = 100

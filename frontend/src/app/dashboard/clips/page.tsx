@@ -97,8 +97,8 @@ export default function ClipsPage() {
   const handlePreview = async (clipId: string) => {
     if (!job) return;
     try {
-        // Request preview generation with PiP and burned-in subtitles
-        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=true&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
+        // Request preview generation with PiP but NO subtitles
+        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
@@ -120,13 +120,13 @@ export default function ClipsPage() {
   const handleLoadPreview = async (clipId: string): Promise<string | null> => {
     if (!job) return null;
     try {
-        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=true&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
+        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
-        
+
         if (!response.ok) return null;
-        
+
         const data = await response.json();
         if (data.url) {
             return `http://localhost:8000${data.url}`;
