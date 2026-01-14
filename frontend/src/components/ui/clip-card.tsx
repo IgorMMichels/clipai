@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   Play,
-  Pause,
   Download,
   Copy,
   CheckCircle2,
@@ -27,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+import { VideoWithTranscription } from "./video-with-transcription";
 
 export interface Clip {
   id: string;
@@ -40,18 +40,22 @@ export interface Clip {
   thumbnailUrl?: string;
   previewUrl?: string;
   outputPath?: string;
+  words?: Array<{
+    text: string;
+    start_time: number;
+    end_time: number;
+  }>;
 }
 
 interface ClipCardProps {
   clip: Clip;
   index: number;
   jobId: string;
-  onExport?: (clipId: string) => void;
   onPreview?: (clipId: string) => void;
   onLoadPreview?: (clipId: string) => Promise<string | null>;
 }
 
-export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPreview }: ClipCardProps) {
+export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipCardProps) {
   const [copied, setCopied] = useState(false);
   const [inlinePreviewUrl, setInlinePreviewUrl] = useState<string | null>(clip.previewUrl || null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -60,7 +64,6 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportMessage, setExportMessage] = useState("");
-  const [exportId, setExportId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fullscreenVideoRef = useRef<HTMLVideoElement>(null);
@@ -167,7 +170,6 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
       if (!response.ok) throw new Error("Failed to start export");
       
       const data = await response.json();
-      setExportId(data.export_id);
       
       // Poll for progress
       const pollProgress = async () => {
@@ -275,14 +277,16 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
           {/* Compact Video Preview */}
           <div className="relative aspect-[9/12] rounded-md bg-muted overflow-hidden group">
             {inlinePreviewUrl ? (
-              <video
-                ref={videoRef}
-                src={inlinePreviewUrl}
-                className="h-full w-full object-cover"
-                loop
-                playsInline
-                onEnded={() => setIsPlaying(false)}
-                onClick={handleInlinePlay}
+              <VideoWithTranscription
+                videoSrc={inlinePreviewUrl}
+                transcript={clip.transcript}
+                wordSegments={clip.words}
+                autoPlay={false}
+                loop={true}
+                controls={false}
+                videoRef={videoRef}
+                onVideoEnd={() => setIsPlaying(false)}
+                className="h-full w-full"
               />
             ) : clip.thumbnailUrl ? (
               <img 
@@ -303,32 +307,27 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
               </div>
             )}
             
-            {/* Overlay controls */}
-            <div
-              className={cn(
-                "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity cursor-pointer",
-                inlinePreviewUrl && isPlaying ? "opacity-0 hover:opacity-100" : "opacity-0 group-hover:opacity-100"
-              )}
-              onClick={handleInlinePlay}
-            >
-              {loadingPreview ? (
-                <Loader2 className="h-8 w-8 text-white animate-spin" />
-              ) : (
-                <div className="rounded-full bg-white/20 backdrop-blur-sm p-3">
-                  {isPlaying ? (
-                    <Pause className="h-6 w-6 text-white" fill="white" />
-                  ) : (
+            {/* Overlay controls for thumbnail */}
+            {!inlinePreviewUrl && (
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity cursor-pointer opacity-0 group-hover:opacity-100"
+                onClick={handleInlinePlay}
+              >
+                {loadingPreview ? (
+                  <Loader2 className="h-8 w-8 text-white animate-spin" />
+                ) : (
+                  <div className="rounded-full bg-white/20 backdrop-blur-sm p-3">
                     <Play className="h-6 w-6 text-white" fill="white" />
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Fullscreen button */}
             <Button
               variant="ghost"
               size="icon"
-              className="absolute top-1.5 right-1.5 h-7 w-7 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute top-1.5 right-1.5 h-7 w-7 bg-black/50 hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity z-30"
               onClick={handleFullscreen}
             >
               <Maximize2 className="h-3.5 w-3.5 text-white" />
@@ -412,23 +411,24 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute -top-12 right-0 h-10 w-10 text-white hover:bg-white/20"
+                className="absolute -top-12 right-0 h-10 w-10 text-white hover:bg-white/20 z-30"
                 onClick={closeFullscreen}
               >
                 <X className="h-6 w-6" />
               </Button>
 
-              {/* Video */}
+              {/* Video with transcription */}
               <div className="h-full w-full rounded-lg overflow-hidden bg-black">
                 {inlinePreviewUrl ? (
-                  <video
-                    ref={fullscreenVideoRef}
-                    src={inlinePreviewUrl}
-                    className="h-full w-full object-contain"
-                    controls
-                    autoPlay
-                    loop
-                    playsInline
+                  <VideoWithTranscription
+                    videoSrc={inlinePreviewUrl}
+                    transcript={clip.transcript}
+                    wordSegments={clip.words}
+                    autoPlay={true}
+                    loop={true}
+                    controls={true}
+                    videoRef={fullscreenVideoRef}
+                    className="h-full w-full"
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center">
@@ -438,7 +438,7 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
               </div>
 
               {/* Info bar */}
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent z-20">
                 <div className="flex items-center justify-between text-white">
                   <div>
                     <h3 className="font-semibold">Clip {index + 1}</h3>
@@ -465,12 +465,11 @@ export function ClipCard({ clip, index, jobId, onExport, onPreview, onLoadPrevie
 interface ClipsGridProps {
   clips: Clip[];
   jobId: string;
-  onExport?: (clipId: string) => void;
   onPreview?: (clipId: string) => void;
   onLoadPreview?: (clipId: string) => Promise<string | null>;
 }
 
-export function ClipsGrid({ clips, jobId, onExport, onPreview, onLoadPreview }: ClipsGridProps) {
+export function ClipsGrid({ clips, jobId, onPreview, onLoadPreview }: ClipsGridProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {clips.map((clip, index) => (
@@ -484,7 +483,6 @@ export function ClipsGrid({ clips, jobId, onExport, onPreview, onLoadPreview }: 
             clip={clip}
             index={index}
             jobId={jobId}
-            onExport={onExport}
             onPreview={onPreview}
             onLoadPreview={onLoadPreview}
           />

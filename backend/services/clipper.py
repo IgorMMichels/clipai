@@ -184,7 +184,11 @@ class ClipFinderService:
                     "transcript": transcript,
                     "score": min(99.9, total_score),
                     "semantic_score": semantic_score if self.use_semantic else 0,
-                    "heuristic_score": heuristic_score
+                    "heuristic_score": heuristic_score,
+                    "words": [
+                        word for word in (transcription_obj.get("words", []))
+                        if word["start_time"] >= start_time and word["end_time"] <= end_time
+                    ]
                 })
                 
                 # Move window

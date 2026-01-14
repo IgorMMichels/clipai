@@ -43,6 +43,11 @@ interface JobData {
     score?: number;
     description?: string;
     hashtags?: string[];
+    words?: Array<{
+      text: string;
+      start_time: number;
+      end_time: number;
+    }>;
   }>;
 }
 
@@ -59,6 +64,8 @@ export default function ClipsPage() {
   
   // Preview state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTranscript, setPreviewTranscript] = useState<string | undefined>(undefined);
+  const [previewWordSegments, setPreviewWordSegments] = useState<Array<{text: string; start_time: number; end_time: number}> | undefined>(undefined);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
 
@@ -89,31 +96,6 @@ export default function ClipsPage() {
     }
   };
 
-  const handleExport = async (clipId: string) => {
-    if (!job) return;
-    
-    try {
-      const response = await fetch(`http://localhost:8000/api/clips/${job.id}/export`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clip_ids: [clipId],
-          aspect_ratio: [9, 16],
-          layout: useStackedLayout ? "stacked" : "fill",
-          add_subtitles: true,
-          generate_description: true,
-          description_language: "en",
-        }),
-      });
-      
-      if (!response.ok) throw new Error("Export failed");
-      const data = await response.json();
-      console.log("Export started:", data);
-    } catch (err) {
-      console.error("Export error:", err);
-    }
-  };
-
   const handlePreview = async (clipId: string) => {
     if (!job) return;
     try {
@@ -129,6 +111,9 @@ export default function ClipsPage() {
         if (data.url) {
             setPreviewUrl(`http://localhost:8000${data.url}`);
             setActiveClipId(clipId);
+            const clip = job?.clips.find(c => c.id === clipId);
+            setPreviewTranscript(clip?.transcript);
+            setPreviewWordSegments(clip?.words);
             setPreviewOpen(true);
         }
     } catch (err) {
@@ -168,6 +153,7 @@ export default function ClipsPage() {
     description: c.description,
     hashtags: c.hashtags,
     thumbnailUrl: `http://localhost:8000/api/clips/${job.id}/thumbnail/${c.id}`,
+    words: c.words,
   })) || [];
 
   // No job selected - show empty state
@@ -321,7 +307,6 @@ export default function ClipsPage() {
         <ClipsGrid
           clips={clips}
           jobId={jobId}
-          onExport={handleExport}
           onPreview={handlePreview}
           onLoadPreview={handleLoadPreview}
         />
@@ -350,6 +335,8 @@ export default function ClipsPage() {
         onClose={() => setPreviewOpen(false)}
         url={previewUrl}
         title={activeClipId ? `Clip ${clips.findIndex(c => c.id === activeClipId) + 1}` : undefined}
+        transcript={previewTranscript}
+        wordSegments={previewWordSegments}
       />
     </div>
   );
