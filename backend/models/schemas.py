@@ -32,6 +32,17 @@ class YouTubeUploadRequest(BaseModel):
     description_language: str = "en"
 
 
+class URLUploadRequest(BaseModel):
+    """Request for processing video from any supported URL (30+ platforms)"""
+    url: str
+    language: Optional[str] = None  # Transcription language (auto-detect if None)
+    aspect_ratio: tuple[int, int] = (9, 16)
+    generate_description: bool = True
+    description_language: str = "en"
+    generate_summary: bool = False  # Generate AI summary
+    summary_language: str = "en"  # Language for summary
+
+
 class ClipInfo(BaseModel):
     id: str
     start_time: float

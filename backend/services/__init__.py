@@ -8,7 +8,19 @@ from .effects import effects_service, EffectsService
 from .youtube import youtube_service, YouTubeService
 from .facecam import facecam_detector, FacecamDetector
 
+# New AI-Video-Transcriber inspired services
+from .summarizer import summarizer_service, SummarizerService
+from .translator import translator_service, TranslatorService
+from .video_downloader import video_downloader_service, VideoDownloaderService
+from .exporter import (
+    export_to_markdown,
+    export_to_srt,
+    export_to_vtt,
+    export_to_json,
+)
+
 __all__ = [
+    # Existing services
     "transcription_service",
     "TranscriptionService",
     "clip_finder_service", 
@@ -25,4 +37,15 @@ __all__ = [
     "YouTubeService",
     "facecam_detector",
     "FacecamDetector",
+    # New AI-Video-Transcriber services
+    "summarizer_service",
+    "SummarizerService",
+    "translator_service",
+    "TranslatorService",
+    "video_downloader_service",
+    "VideoDownloaderService",
+    "export_to_markdown",
+    "export_to_srt",
+    "export_to_vtt",
+    "export_to_json",
 ]

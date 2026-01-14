@@ -1,6 +1,7 @@
 """
 ClipAI Backend - FastAPI Application
-AI-powered video clipping tool
+AI-powered video clipping tool with transcription, summarization, and translation
+Enhanced with AI-Video-Transcriber features
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from config import settings
-from api.routes import upload_router, clips_router, storage_router
+from api.routes import upload_router, clips_router, storage_router, transcribe_router
 
 
 # Configure logging
@@ -41,8 +42,21 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="ClipAI",
-    description="AI-powered video clipping tool. Transform long videos into viral clips.",
-    version="1.0.0",
+    description="""AI-powered video clipping tool. Transform long videos into viral clips.
+
+## Features
+- **Video Transcription**: Accurate speech-to-text using Faster-Whisper
+- **AI Text Optimization**: Automatic typo correction and intelligent paragraphing
+- **Multi-Platform Support**: Download from YouTube, TikTok, Bilibili, Instagram, Twitter, and 30+ more
+- **AI Summarization**: Generate intelligent summaries in multiple languages
+- **Translation**: Translate transcripts between languages
+- **Real-time Progress**: SSE streaming for live progress updates
+- **Clip Detection**: Find viral-worthy moments with AI scoring
+
+## Transcription API
+Use `/api/transcribe/url` or `/api/transcribe/file` for standalone transcription.
+""",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -62,6 +76,7 @@ app.mount("/outputs", StaticFiles(directory=str(settings.OUTPUT_DIR)), name="out
 app.include_router(upload_router, prefix="/api")
 app.include_router(clips_router, prefix="/api")
 app.include_router(storage_router, prefix="/api")
+app.include_router(transcribe_router, prefix="/api")
 
 
 @app.get("/")
@@ -69,9 +84,14 @@ async def root():
     """Health check endpoint"""
     return {
         "name": "ClipAI",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "status": "running",
         "docs": "/docs",
+        "features": {
+            "transcription": "/api/transcribe",
+            "clip_detection": "/api/upload",
+            "export": "/api/clips",
+        }
     }
 
 
@@ -79,6 +99,37 @@ async def root():
 async def health():
     """Health check for API"""
     return {"status": "healthy"}
+
+
+@app.get("/api/capabilities")
+async def capabilities():
+    """Get API capabilities and supported features"""
+    from services.video_downloader import video_downloader_service
+    from services.summarizer import SUMMARY_LANGUAGES
+    from services.translator import SUPPORTED_LANGUAGES
+    
+    return {
+        "transcription": {
+            "engine": "Faster-Whisper",
+            "models": ["tiny", "base", "small", "medium", "large"],
+            "features": [
+                "Word-level timestamps",
+                "VAD filtering",
+                "AI text optimization",
+                "Auto language detection",
+            ],
+        },
+        "platforms": video_downloader_service.get_supported_platforms(),
+        "summary_languages": [
+            {"code": code, "name": name}
+            for code, name in SUMMARY_LANGUAGES.items()
+        ],
+        "translation_languages": [
+            {"code": code, "name": name}
+            for code, name in SUPPORTED_LANGUAGES.items()
+        ],
+        "export_formats": ["markdown", "srt", "vtt", "json"],
+    }
 
 
 if __name__ == "__main__":

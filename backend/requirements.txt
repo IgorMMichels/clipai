@@ -14,6 +14,7 @@ ffmpeg-python>=0.2.0
 google-generativeai>=0.4.0
 openai>=1.12.0
 anthropic>=0.18.0
+faster-whisper>=1.1.0
 
 # Task queue (optional - comment out if not using)
 # celery[redis]>=5.3.6

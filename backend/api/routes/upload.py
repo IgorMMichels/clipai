@@ -1,5 +1,6 @@
 """
 Video Upload API Routes
+Enhanced with multi-platform support and AI features
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -10,8 +11,8 @@ import shutil
 import aiofiles
 
 from config import settings
-from models.schemas import VideoUploadRequest, YouTubeUploadRequest, VideoJobResponse, ProcessingStatus
-from services import youtube_service
+from models.schemas import VideoUploadRequest, YouTubeUploadRequest, URLUploadRequest, VideoJobResponse, ProcessingStatus
+from services import video_downloader_service
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -87,11 +88,36 @@ async def upload_youtube(
     background_tasks: BackgroundTasks,
 ):
     """
-    Process a YouTube video
+    Process a YouTube video (legacy endpoint, use /url for all platforms)
+    """
+    # Redirect to the new URL endpoint
+    url_request = URLUploadRequest(
+        url=request.url,
+        language=request.language,
+        aspect_ratio=request.aspect_ratio,
+        generate_description=request.generate_description,
+        description_language=request.description_language,
+    )
+    return await upload_from_url(url_request, background_tasks)
+
+
+@router.post("/url", response_model=VideoJobResponse)
+async def upload_from_url(
+    request: URLUploadRequest,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Process a video from any supported URL (30+ platforms)
+    
+    Supports: YouTube, TikTok, Bilibili, Instagram, Twitter, Facebook, 
+    Vimeo, Twitch, Reddit, and many more.
     """
     job_id = str(uuid.uuid4())
     filename = f"{job_id}.mp4"
     upload_path = settings.UPLOAD_DIR / filename
+    
+    # Detect platform
+    platform = video_downloader_service.detect_platform(request.url)
     
     # Create job entry
     jobs[job_id] = {
@@ -100,47 +126,66 @@ async def upload_youtube(
         "original_path": str(upload_path),
         "status": ProcessingStatus.PENDING,
         "progress": 0,
-        "message": "YouTube video queued",
+        "message": f"Video from {platform or 'URL'} queued",
         "language": request.language,
         "aspect_ratio": request.aspect_ratio,
         "generate_description": request.generate_description,
         "description_language": request.description_language,
+        "generate_summary": request.generate_summary,
+        "summary_language": request.summary_language,
         "clips": [],
         "source_url": request.url,
+        "platform": platform,
     }
     
     # Start processing in background
-    background_tasks.add_task(process_youtube_job, job_id, request.url)
+    background_tasks.add_task(process_url_job, job_id, request.url)
     
     return VideoJobResponse(
         id=job_id,
         status=ProcessingStatus.PENDING,
         progress=0,
-        message="YouTube video queued for download.",
+        message=f"Video from {platform or 'URL'} queued for download.",
         clips_count=0,
     )
 
 
-async def process_youtube_job(job_id: str, url: str):
-    """Background task to download and process YouTube video"""
+async def process_url_job(job_id: str, url: str):
+    """Background task to download and process video from any URL"""
     job = jobs.get(job_id)
     if not job:
         return
         
     try:
         job["status"] = ProcessingStatus.DOWNLOADING
-        job["message"] = "Downloading YouTube video..."
+        platform = job.get("platform", "video")
+        job["message"] = f"Downloading {platform} video..."
         job["progress"] = 5
         
         output_path = Path(job["original_path"])
         
-        # Download
-        info = youtube_service.download_video(url, output_path)
+        # Download using multi-platform downloader
+        def progress_callback(percent: float, message: str):
+            job["progress"] = int(5 + percent * 0.1)  # 5-15%
+            job["message"] = message
         
-        job["message"] = f"Downloaded: {info.get('title')}"
+        info = video_downloader_service.download_video(
+            url=url,
+            output_path=output_path,
+            progress_callback=progress_callback,
+        )
+        
+        # Update job with video info
+        job["message"] = f"Downloaded: {info.get('title', 'Video')}"
         job["title"] = info.get("title")
         job["duration"] = info.get("duration")
         job["thumbnail"] = info.get("thumbnail")
+        job["platform"] = info.get("platform")
+        job["platform_name"] = info.get("platform_name")
+        
+        # Update file path if different
+        if info.get("downloaded_file"):
+            job["original_path"] = info["downloaded_file"]
         
         # Continue with normal processing
         await process_video_job(job_id)
@@ -150,6 +195,12 @@ async def process_youtube_job(job_id: str, url: str):
         traceback.print_exc()
         job["status"] = ProcessingStatus.FAILED
         job["message"] = f"Download failed: {str(e)}"
+
+
+# Legacy function - redirects to new implementation
+async def process_youtube_job(job_id: str, url: str):
+    """Background task to download and process YouTube video (legacy)"""
+    await process_url_job(job_id, url)
 
 
 
@@ -201,6 +252,23 @@ async def process_video_job(job_id: str):
         is_fallback = transcription.get("_is_fallback", False)
         if is_fallback:
             job["message"] = "Using fallback transcription (limited mode)"
+        
+        # Step 1.5: Generate Summary (if requested)
+        if job.get("generate_summary", False):
+            try:
+                from services import summarizer_service
+                job["message"] = "Generating AI summary..."
+                summary_lang = job.get("summary_language", "en")
+                
+                summary = summarizer_service.summarize(
+                    transcript=transcription["text"],
+                    language=summary_lang,
+                )
+                job["summary"] = summary
+                job["message"] = "Summary generated"
+            except Exception as e:
+                print(f"Summary generation failed: {e}")
+                # Don't fail the whole job
         
         # Step 2: Find clips
         job["status"] = ProcessingStatus.FINDING_CLIPS
