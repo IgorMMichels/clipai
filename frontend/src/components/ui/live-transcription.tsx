@@ -38,21 +38,17 @@ export function LiveTranscription({ jobId, onComplete }: LiveTranscriptionProps)
   useEffect(() => {
     if (!jobId) return;
 
-    // Connect to SSE stream
-    const eventSource = new EventSource(`http://localhost:8000/api/transcribe/stream/${jobId}`);
+    // Connect to SSE stream for upload job progress
+    const eventSource = new EventSource(`http://localhost:8000/api/upload/stream/${jobId}`);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
       setIsConnected(true);
+      console.log("SSE connection opened");
     };
 
     eventSource.onmessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("SSE Event:", data);
-      } catch (e) {
-        // Not JSON, ignore
-      }
+      console.log("SSE message:", event.data);
     };
 
     eventSource.addEventListener("progress", (event: MessageEvent) => {
@@ -60,15 +56,15 @@ export function LiveTranscription({ jobId, onComplete }: LiveTranscriptionProps)
         const data = JSON.parse(event.data);
         setStage(data.stage || "processing");
         setProgress(data.percent || 0);
-      } catch (e) {}
-    });
-
-    eventSource.addEventListener("transcript", (event: MessageEvent) => {
-      try {
-        const data: TranscriptSegment = JSON.parse(event.data);
-        setTranscript(data.text);
-        setWordCount(data.word_count || 0);
-      } catch (e) {}
+        if (data.transcript) {
+          setTranscript(data.transcript);
+        }
+        if (data.word_count) {
+          setWordCount(data.word_count);
+        }
+      } catch (e) {
+        console.error("Error parsing progress event:", e);
+      }
     });
 
     eventSource.addEventListener("complete", (event: MessageEvent) => {
@@ -82,25 +78,18 @@ export function LiveTranscription({ jobId, onComplete }: LiveTranscriptionProps)
         if (data.summary) {
           setSummary(data.summary);
         }
-        if (data.transcript_language) {
-          setDetectedLanguage(data.transcript_language);
-        }
         onComplete?.(data.transcript || transcript);
         eventSource.close();
         setIsConnected(false);
-      } catch (e) {}
+      } catch (e) {
+        console.error("Error parsing complete event:", e);
+      }
     });
 
-    eventSource.addEventListener("error", (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.error("Error:", data.message);
-      } catch (e) {}
-    });
-
-    eventSource.onerror = () => {
+    eventSource.onerror = (error: Event) => {
+      console.error("SSE error:", error);
       setIsConnected(false);
-      eventSource.close();
+      // Don't close on error, let it retry
     };
 
     return () => {

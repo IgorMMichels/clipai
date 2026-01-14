@@ -3,12 +3,14 @@ Video Upload API Routes
 Enhanced with multi-platform support and AI features
 """
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pathlib import Path
 from typing import Optional
 import uuid
 import shutil
 import aiofiles
+import json
+import asyncio
 
 from config import settings
 from models.schemas import VideoUploadRequest, YouTubeUploadRequest, URLUploadRequest, VideoJobResponse, ProcessingStatus
@@ -341,3 +343,70 @@ async def get_job_details(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     
     return job
+
+
+@router.get("/stream/{job_id}")
+async def stream_job_progress(job_id: str):
+    """
+    Server-Sent Events (SSE) stream for real-time job progress
+    """
+    job = jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    async def event_generator():
+        last_message = ""
+        last_transcript = ""
+        
+        while True:
+            job = jobs.get(job_id)
+            if not job:
+                yield f"event: error\ndata: {json.dumps({'message': 'Job not found'})}\n\n"
+                break
+            
+            # Send progress updates
+            message = job.get("message", "")
+            progress = job.get("progress", 0)
+            status = job.get("status", "")
+            transcript = job.get("transcript", "")
+            word_count = len(transcript.split()) if transcript else 0
+            
+            # Only send if something changed
+            if message != last_message or progress > 0:
+                event_data = {
+                    "stage": status,
+                    "percent": progress,
+                    "message": message,
+                    "transcript": transcript,
+                    "word_count": word_count,
+                }
+                yield f"event: progress\ndata: {json.dumps(event_data)}\n\n"
+                last_message = message
+            
+            # Check if job is complete or failed
+            if status == "completed":
+                final_data = {
+                    "stage": "complete",
+                    "percent": 100,
+                    "message": job.get("message", "Complete"),
+                    "transcript": transcript,
+                    "word_count": word_count,
+                    "summary": job.get("summary"),
+                }
+                yield f"event: complete\ndata: {json.dumps(final_data)}\n\n"
+                break
+            elif status == "failed":
+                yield f"event: error\ndata: {json.dumps({'message': job.get('error', 'Unknown error')})}\n\n"
+                break
+            
+            await asyncio.sleep(0.5)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
