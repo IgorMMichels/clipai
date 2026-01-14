@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
-import { VideoWithTranscription } from "./video-with-transcription";
+
 
 export interface Clip {
   id: string;
@@ -277,20 +277,28 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
           {/* Compact Video Preview */}
           <div className="relative aspect-[9/12] rounded-md bg-muted overflow-hidden group">
             {inlinePreviewUrl ? (
-              <VideoWithTranscription
-                videoSrc={inlinePreviewUrl}
-                transcript={clip.transcript}
-                wordSegments={clip.words}
-                autoPlay={false}
-                loop={true}
-                controls={false}
-                videoRef={videoRef}
-                onVideoEnd={() => setIsPlaying(false)}
-                className="h-full w-full"
+              <video
+                ref={videoRef}
+                src={inlinePreviewUrl}
+                className="h-full w-full object-cover"
+                loop
+                playsInline
+                onEnded={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onClick={() => {
+                  if (videoRef.current) {
+                    if (isPlaying) {
+                      videoRef.current.pause();
+                    } else {
+                      videoRef.current.play();
+                    }
+                  }
+                }}
               />
             ) : clip.thumbnailUrl ? (
-              <img 
-                src={clip.thumbnailUrl} 
+              <img
+                src={clip.thumbnailUrl}
                 alt={`Clip ${index + 1}`}
                 className="h-full w-full object-cover"
                 onError={(e) => {
@@ -306,7 +314,7 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
                 </div>
               </div>
             )}
-            
+
             {/* Overlay controls for thumbnail */}
             {!inlinePreviewUrl && (
               <div
@@ -320,6 +328,17 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
                     <Play className="h-6 w-6 text-white" fill="white" />
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Play/Pause overlay for video */}
+            {inlinePreviewUrl && !isPlaying && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => videoRef.current?.play()}
+              >
+                <div className="rounded-full bg-white/20 backdrop-blur-sm p-4">
+                  <Play className="h-8 w-8 text-white" fill="white" />
+                </div>
               </div>
             )}
 
@@ -420,15 +439,14 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
               {/* Video with transcription */}
               <div className="h-full w-full rounded-lg overflow-hidden bg-black">
                 {inlinePreviewUrl ? (
-                  <VideoWithTranscription
-                    videoSrc={inlinePreviewUrl}
-                    transcript={clip.transcript}
-                    wordSegments={clip.words}
-                    autoPlay={true}
-                    loop={true}
-                    controls={true}
-                    videoRef={fullscreenVideoRef}
-                    className="h-full w-full"
+                  <video
+                    ref={fullscreenVideoRef}
+                    src={inlinePreviewUrl}
+                    className="h-full w-full object-contain"
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center">

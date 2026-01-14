@@ -64,8 +64,6 @@ export default function ClipsPage() {
   
   // Preview state
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewTranscript, setPreviewTranscript] = useState<string | undefined>(undefined);
-  const [previewWordSegments, setPreviewWordSegments] = useState<Array<{text: string; start_time: number; end_time: number}> | undefined>(undefined);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
 
@@ -99,21 +97,18 @@ export default function ClipsPage() {
   const handlePreview = async (clipId: string) => {
     if (!job) return;
     try {
-        // Request preview generation with PiP and subtitles
+        // Request preview generation with PiP and burned-in subtitles
         const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=true&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
-        
+
         if (!response.ok) throw new Error("Preview generation failed");
-        
+
         const data = await response.json();
         if (data.url) {
             setPreviewUrl(`http://localhost:8000${data.url}`);
             setActiveClipId(clipId);
-            const clip = job?.clips.find(c => c.id === clipId);
-            setPreviewTranscript(clip?.transcript);
-            setPreviewWordSegments(clip?.words);
             setPreviewOpen(true);
         }
     } catch (err) {
@@ -330,13 +325,11 @@ export default function ClipsPage() {
         </motion.div>
       )}
       
-      <PreviewModal 
-        isOpen={previewOpen} 
+      <PreviewModal
+        isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}
         url={previewUrl}
         title={activeClipId ? `Clip ${clips.findIndex(c => c.id === activeClipId) + 1}` : undefined}
-        transcript={previewTranscript}
-        wordSegments={previewWordSegments}
       />
     </div>
   );
