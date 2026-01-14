@@ -284,8 +284,10 @@ async def generate_preview(
     clip_id: str,
     aspect_ratio_w: int = 9,
     aspect_ratio_h: int = 16,
+    with_subtitles: bool = True,
+    with_pip: bool = True,
 ):
-    """Generate a quick preview for a specific clip"""
+    """Generate a quick preview for a specific clip with PiP and subtitles"""
     from services import video_editor_service
     
     job = jobs.get(job_id)
@@ -299,7 +301,10 @@ async def generate_preview(
     # Define output path
     output_dir = settings.OUTPUT_DIR / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_filename = f"preview_{clip_id}.mp4"
+    
+    # Include options in filename for caching
+    opts = f"{'pip' if with_pip else 'nopip'}_{'sub' if with_subtitles else 'nosub'}"
+    output_filename = f"preview_{clip_id}_{opts}.mp4"
     output_path = output_dir / output_filename
     
     # Return existing if available
@@ -308,14 +313,56 @@ async def generate_preview(
         
     try:
         video_path = Path(job["original_path"])
-        video_editor_service.generate_preview(
-            input_path=video_path,
-            output_path=output_path,
-            start_time=clip["start_time"],
-            end_time=clip["end_time"],
-            aspect_ratio=(aspect_ratio_w, aspect_ratio_h),
-        )
+        facecam_region = job.get("facecam_region")
+        
+        # Build subtitles from transcription words
+        subtitles = []
+        if with_subtitles:
+            transcription = job.get("transcription", {})
+            words = transcription.get("words", [])
+            
+            if words:
+                for w in words:
+                    if w["end_time"] > clip["start_time"] and w["start_time"] < clip["end_time"]:
+                        subtitles.append({
+                            "text": w["text"],
+                            "start_time": w["start_time"],
+                            "end_time": w["end_time"]
+                        })
+            else:
+                # Fallback: use clip transcript as single subtitle
+                subtitles = [{
+                    "text": clip.get("transcript", ""),
+                    "start_time": clip["start_time"],
+                    "end_time": clip["end_time"]
+                }]
+        
+        # Use the new PiP processing if facecam detected and PiP requested
+        if with_pip and facecam_region:
+            video_editor_service.process_viral_clip_with_pip(
+                input_path=video_path,
+                output_path=output_path,
+                start_time=clip["start_time"],
+                end_time=clip["end_time"],
+                facecam_region=facecam_region,
+                subtitles=subtitles,
+                pip_position=facecam_region.get("is_corner", "bottom-right"),
+                pip_scale=0.3,
+                fps=30  # Lower fps for preview
+            )
+        else:
+            # Standard preview without PiP
+            video_editor_service.generate_preview(
+                input_path=video_path,
+                output_path=output_path,
+                start_time=clip["start_time"],
+                end_time=clip["end_time"],
+                aspect_ratio=(aspect_ratio_w, aspect_ratio_h),
+            )
+        
         return {"url": f"/outputs/{job_id}/{output_filename}", "status": "ready"}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

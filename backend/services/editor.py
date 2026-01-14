@@ -445,6 +445,231 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 
         return output_path
 
+    def apply_pip_layout(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        facecam_region: dict,
+        pip_position: str = "bottom-right",
+        pip_scale: float = 0.25,
+        fps: int = 60,
+    ) -> Path:
+        """
+        Apply Picture-in-Picture layout: Main content with facecam overlay
+        
+        Args:
+            input_path: Source video path
+            output_path: Output video path
+            facecam_region: Dict with x, y, width, height of facecam region
+            pip_position: Where to place PiP (top-left, top-right, bottom-left, bottom-right)
+            pip_scale: Scale of PiP relative to output width (0.25 = 25%)
+            fps: Output framerate
+        """
+        from moviepy import VideoFileClip, CompositeVideoClip
+        
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Applying PiP layout to: {input_path}")
+        
+        clip = VideoFileClip(str(input_path))
+        
+        # Target dimensions for 9:16
+        target_w = 1080
+        target_h = 1920
+        
+        # Extract facecam region
+        fc_x = facecam_region.get("x", 0)
+        fc_y = facecam_region.get("y", 0)
+        fc_w = facecam_region.get("width", clip.w // 4)
+        fc_h = facecam_region.get("height", clip.h // 4)
+        
+        # Ensure bounds are within frame
+        fc_x = max(0, min(fc_x, clip.w - fc_w))
+        fc_y = max(0, min(fc_y, clip.h - fc_h))
+        fc_w = min(fc_w, clip.w - fc_x)
+        fc_h = min(fc_h, clip.h - fc_y)
+        
+        # Crop facecam from original
+        facecam_clip = clip.cropped(x1=fc_x, y1=fc_y, width=fc_w, height=fc_h)
+        
+        # Scale facecam for PiP
+        pip_width = int(target_w * pip_scale)
+        facecam_clip = facecam_clip.resized(width=pip_width)
+        
+        # Create main content (resize to fill 9:16, center crop if needed)
+        # Calculate scale to cover the target
+        scale_w = target_w / clip.w
+        scale_h = target_h / clip.h
+        scale = max(scale_w, scale_h)
+        
+        main_clip = clip.resized(scale)
+        # Center crop
+        main_clip = main_clip.cropped(
+            x_center=main_clip.w / 2,
+            y_center=main_clip.h / 2,
+            width=target_w,
+            height=target_h
+        )
+        
+        # Position PiP
+        margin = 40
+        if pip_position == "top-left":
+            pip_pos = (margin, margin)
+        elif pip_position == "top-right":
+            pip_pos = (target_w - pip_width - margin, margin)
+        elif pip_position == "bottom-left":
+            pip_pos = (margin, target_h - facecam_clip.h - margin)
+        else:  # bottom-right
+            pip_pos = (target_w - pip_width - margin, target_h - facecam_clip.h - margin)
+        
+        facecam_clip = facecam_clip.with_position(pip_pos)
+        
+        # Composite
+        final = CompositeVideoClip([main_clip, facecam_clip], size=(target_w, target_h))
+        
+        final.write_videofile(
+            str(output_path),
+            fps=fps,
+            codec="libx264",
+            audio_codec="aac",
+            temp_audiofile=str(output_path.with_suffix(".m4a")),
+            remove_temp=True,
+            logger=None,
+            preset="medium",
+            bitrate="8000k"
+        )
+        
+        clip.close()
+        facecam_clip.close()
+        main_clip.close()
+        final.close()
+        
+        logger.info(f"PiP layout saved to: {output_path}")
+        return output_path
+
+    def process_viral_clip_with_pip(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        start_time: float,
+        end_time: float,
+        facecam_region: Optional[dict],
+        subtitles: List[dict],
+        pip_position: str = "bottom-right",
+        pip_scale: float = 0.25,
+        fps: int = 60
+    ) -> Path:
+        """
+        Full pipeline with PiP: Trim -> PiP Layout -> Burn Subtitles
+        """
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        
+        temp_trim = output_path.with_name(f"temp_trim_{uuid.uuid4()}{input_path.suffix}")
+        temp_pip = output_path.with_name(f"temp_pip_{uuid.uuid4()}{input_path.suffix}")
+        
+        try:
+            # 1. Trim
+            self.trim_clip(input_path, temp_trim, start_time, end_time)
+            
+            # 2. Apply PiP layout if facecam detected
+            if facecam_region:
+                self.apply_pip_layout(
+                    input_path=temp_trim,
+                    output_path=temp_pip,
+                    facecam_region=facecam_region,
+                    pip_position=pip_position,
+                    pip_scale=pip_scale,
+                    fps=fps
+                )
+            else:
+                # No facecam, just resize to 9:16
+                self._resize_to_vertical(temp_trim, temp_pip, fps)
+            
+            # 3. Adjust subtitles timing
+            adjusted_subtitles = []
+            for sub in subtitles:
+                sub_start = sub.get("start_time", 0)
+                sub_end = sub.get("end_time", 0)
+                
+                if sub_end <= start_time or sub_start >= end_time:
+                    continue
+                
+                new_start = max(0.0, sub_start - start_time)
+                new_end = min(end_time - start_time, sub_end - start_time)
+                
+                adjusted_subtitles.append({
+                    "text": sub.get("text", ""),
+                    "start_time": new_start,
+                    "end_time": new_end
+                })
+            
+            # 4. Burn subtitles
+            if adjusted_subtitles:
+                self.add_subtitles(
+                    video_path=temp_pip,
+                    output_path=output_path,
+                    subtitles=adjusted_subtitles
+                )
+            else:
+                # No subtitles, just copy
+                import shutil
+                shutil.copy(temp_pip, output_path)
+            
+            logger.info(f"Viral clip with PiP saved to: {output_path}")
+            return output_path
+            
+        finally:
+            if temp_trim.exists():
+                temp_trim.unlink()
+            if temp_pip.exists():
+                temp_pip.unlink()
+    
+    def _resize_to_vertical(
+        self,
+        input_path: Path,
+        output_path: Path,
+        fps: int = 60
+    ) -> Path:
+        """Resize video to 9:16 vertical format with center crop"""
+        from moviepy import VideoFileClip
+        
+        clip = VideoFileClip(str(input_path))
+        
+        target_w = 1080
+        target_h = 1920
+        
+        # Scale to cover
+        scale_w = target_w / clip.w
+        scale_h = target_h / clip.h
+        scale = max(scale_w, scale_h)
+        
+        resized = clip.resized(scale)
+        cropped = resized.cropped(
+            x_center=resized.w / 2,
+            y_center=resized.h / 2,
+            width=target_w,
+            height=target_h
+        )
+        
+        cropped.write_videofile(
+            str(output_path),
+            fps=fps,
+            codec="libx264",
+            audio_codec="aac",
+            temp_audiofile=str(output_path.with_suffix(".m4a")),
+            remove_temp=True,
+            logger=None,
+            preset="medium",
+            bitrate="8000k"
+        )
+        
+        clip.close()
+        cropped.close()
+        return output_path
+
     def _create_srt(self, subtitles: List[dict], output_path: Path):
         """Create an SRT subtitle file"""
         def format_time(seconds: float) -> str:

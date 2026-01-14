@@ -6,6 +6,7 @@ from .editor import video_editor_service, VideoEditorService
 from .description import description_service, DescriptionGeneratorService
 from .effects import effects_service, EffectsService
 from .youtube import youtube_service, YouTubeService
+from .facecam import facecam_detector, FacecamDetector
 
 __all__ = [
     "transcription_service",
@@ -22,4 +23,6 @@ __all__ = [
     "EffectsService",
     "youtube_service",
     "YouTubeService",
+    "facecam_detector",
+    "FacecamDetector",
 ]

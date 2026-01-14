@@ -155,13 +155,28 @@ async def process_youtube_job(job_id: str, url: str):
 
 async def process_video_job(job_id: str):
     """Background task to process video"""
-    from services import transcription_service, clip_finder_service, description_service
+    from services import transcription_service, clip_finder_service, description_service, facecam_detector
     
     job = jobs.get(job_id)
     if not job:
         return
     
     try:
+        # Step 0: Detect facecam
+        job["message"] = "Detecting facecam region..."
+        job["progress"] = 5
+        
+        try:
+            facecam_region = facecam_detector.detect_facecam_region(job["original_path"])
+            job["facecam_region"] = facecam_region
+            if facecam_region:
+                job["message"] = f"Facecam detected at {facecam_region.get('is_corner', 'unknown')} corner"
+            else:
+                job["message"] = "No facecam detected, will use center crop"
+        except Exception as e:
+            job["facecam_region"] = None
+            job["message"] = f"Facecam detection skipped: {str(e)}"
+        
         # Step 1: Transcribe
         job["status"] = ProcessingStatus.TRANSCRIBING
         job["progress"] = 10
