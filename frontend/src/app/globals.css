@@ -1,0 +1,216 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  
+  /* ClipAI custom colors */
+  --color-neon-purple: var(--neon-purple);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-cyan: var(--neon-cyan);
+  --color-neon-pink: var(--neon-pink);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.55 0.25 270);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.55 0.25 270);
+  --chart-1: oklch(0.55 0.25 270);
+  --chart-2: oklch(0.6 0.25 240);
+  --chart-3: oklch(0.65 0.25 200);
+  --chart-4: oklch(0.7 0.25 320);
+  --chart-5: oklch(0.75 0.25 280);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.55 0.25 270);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.55 0.25 270);
+  
+  /* ClipAI Neon Colors */
+  --neon-purple: oklch(0.55 0.25 270);
+  --neon-blue: oklch(0.6 0.25 240);
+  --neon-cyan: oklch(0.7 0.2 200);
+  --neon-pink: oklch(0.65 0.25 320);
+}
+
+.dark {
+  --background: oklch(0.1 0.02 270);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.15 0.02 270);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.15 0.02 270);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.7 0.25 270);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.2 0.02 270);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.2 0.02 270);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.25 0.05 270);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.25 270);
+  --chart-1: oklch(0.7 0.25 270);
+  --chart-2: oklch(0.65 0.25 240);
+  --chart-3: oklch(0.7 0.2 200);
+  --chart-4: oklch(0.65 0.25 320);
+  --chart-5: oklch(0.6 0.25 280);
+  --sidebar: oklch(0.12 0.02 270);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.7 0.25 270);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.2 0.02 270);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.7 0.25 270);
+  
+  /* ClipAI Neon Colors - Dark mode */
+  --neon-purple: oklch(0.7 0.3 270);
+  --neon-blue: oklch(0.65 0.3 240);
+  --neon-cyan: oklch(0.75 0.25 200);
+  --neon-pink: oklch(0.7 0.3 320);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Glowing effect utilities */
+@layer utilities {
+  .glow-purple {
+    box-shadow: 0 0 20px oklch(0.7 0.25 270 / 50%),
+                0 0 40px oklch(0.7 0.25 270 / 30%),
+                0 0 60px oklch(0.7 0.25 270 / 20%);
+  }
+  
+  .glow-blue {
+    box-shadow: 0 0 20px oklch(0.65 0.25 240 / 50%),
+                0 0 40px oklch(0.65 0.25 240 / 30%),
+                0 0 60px oklch(0.65 0.25 240 / 20%);
+  }
+  
+  .glow-cyan {
+    box-shadow: 0 0 20px oklch(0.75 0.2 200 / 50%),
+                0 0 40px oklch(0.75 0.2 200 / 30%),
+                0 0 60px oklch(0.75 0.2 200 / 20%);
+  }
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[oklch(0.7_0.25_270)] via-[oklch(0.65_0.25_240)] to-[oklch(0.75_0.2_200)];
+  }
+  
+  .bg-grid {
+    background-image: 
+      linear-gradient(to right, oklch(1 0 0 / 3%) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(1 0 0 / 3%) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  
+  .dark .bg-grid {
+    background-image: 
+      linear-gradient(to right, oklch(1 0 0 / 5%) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(1 0 0 / 5%) 1px, transparent 1px);
+  }
+}
+
+/* Animation keyframes */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(1 0 0 / 10%) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}

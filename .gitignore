@@ -18,12 +18,13 @@ build/
 .env*.local
 *.env
 
-# Node
-node_modules/
-.next/
-out/
-build/
-*.tsbuildinfo
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/*.tsbuildinfo
+frontend/package-lock.json
 
 # IDE
 .idea/
