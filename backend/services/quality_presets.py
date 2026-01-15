@@ -2,7 +2,7 @@
 Quality Presets Service
 Pre-configured export settings for different platforms
 """
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from dataclasses import dataclass
 
 

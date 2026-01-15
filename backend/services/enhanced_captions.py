@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import os
 import re
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ CAPTION_THEMES: Dict[str, CaptionTheme] = {
         outline_width=5,
         shadow_depth=3,
         bold=True,
-        position=CaptionPosition(margin_v=150, avoid_center=False),
+        position=CaptionPosition(margin_v=150, margin_h=20, alignment=2, avoid_center=False),
     ),
     "gradient_sunset": CaptionTheme(
         name="Gradient Sunset",
@@ -105,7 +106,6 @@ CAPTION_THEMES: Dict[str, CaptionTheme] = {
         shadow_depth=4,
         bold=True,
         animation="glow",
-        position=CaptionPosition(margin_v=160, avoid_center=False),
     ),
     "neon_blue": CaptionTheme(
         name="Neon Blue",
@@ -119,7 +119,6 @@ CAPTION_THEMES: Dict[str, CaptionTheme] = {
         shadow_depth=4,
         bold=True,
         animation="glow",
-        position=CaptionPosition(margin_v=160, avoid_center=False),
     ),
     "minimal": CaptionTheme(
         name="Minimal",
@@ -130,8 +129,6 @@ CAPTION_THEMES: Dict[str, CaptionTheme] = {
         outline_width=2,
         shadow_depth=0,
         bold=False,
-        margin_v=180,
-        position=CaptionPosition(margin_v=180, avoid_center=False),
     ),
     "bounce": CaptionTheme(
         name="Bounce",
@@ -144,7 +141,6 @@ CAPTION_THEMES: Dict[str, CaptionTheme] = {
         shadow_depth=2,
         bold=True,
         animation="bounce",
-        position=CaptionPosition(margin_v=150, avoid_center=False),
     ),
     "wave": CaptionTheme(
         name="Wave",
