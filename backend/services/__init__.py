@@ -20,11 +20,20 @@ from .exporter import (
     export_to_json,
 )
 
+# Enhanced Services (NEW)
+from .enhanced_clipper import enhanced_clip_finder_service
+from .enhanced_captions import enhanced_captions_service
+from .scene_detection import scene_detection_service
+from .camera_switching import camera_switching_service
+from .optimized_processor import optimized_video_processor
+from .batch_processor import batch_processing_service
+from .quality_presets import quality_presets_service, QUALITY_PRESETS, QualityPreset
+
 __all__ = [
     # Existing services
     "transcription_service",
     "TranscriptionService",
-    "clip_finder_service", 
+    "clip_finder_service",
     "ClipFinderService",
     "resize_service",
     "ResizeService",
@@ -54,4 +63,14 @@ __all__ = [
     "export_to_srt",
     "export_to_vtt",
     "export_to_json",
+    # Enhanced Services
+    "enhanced_clip_finder_service",
+    "enhanced_captions_service",
+    "scene_detection_service",
+    "camera_switching_service",
+    "optimized_video_processor",
+    "batch_processing_service",
+    "quality_presets_service",
+    "QUALITY_PRESETS",
+    "QualityPreset",
 ]
