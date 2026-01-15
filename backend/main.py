@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from config import settings
-from api.routes import upload_router, clips_router, storage_router, transcribe_router
+from api.routes import upload_router, clips_router, storage_router, transcribe_router, captions_router
 
 
 # Configure logging
@@ -77,6 +77,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(clips_router, prefix="/api")
 app.include_router(storage_router, prefix="/api")
 app.include_router(transcribe_router, prefix="/api")
+app.include_router(captions_router, prefix="/api")
 
 
 @app.get("/")
@@ -107,6 +108,7 @@ async def capabilities():
     from services.video_downloader import video_downloader_service
     from services.summarizer import SUMMARY_LANGUAGES
     from services.translator import SUPPORTED_LANGUAGES
+    from services.captions import CAPTION_THEMES, CaptionStyle
     
     return {
         "transcription": {
@@ -117,6 +119,19 @@ async def capabilities():
                 "VAD filtering",
                 "AI text optimization",
                 "Auto language detection",
+            ],
+        },
+        "captions": {
+            "themes": [
+                {"id": theme_id, "name": theme.name}
+                for theme_id, theme in CAPTION_THEMES.items()
+            ],
+            "styles": [style.value for style in CaptionStyle],
+            "features": [
+                "Karaoke-style word highlighting",
+                "Gradient color transitions",
+                "Bounce animations",
+                "Neon glow effects",
             ],
         },
         "platforms": video_downloader_service.get_supported_platforms(),

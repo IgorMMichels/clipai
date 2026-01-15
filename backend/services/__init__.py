@@ -7,6 +7,7 @@ from .description import description_service, DescriptionGeneratorService
 from .effects import effects_service, EffectsService
 from .youtube import youtube_service, YouTubeService
 from .facecam import facecam_detector, FacecamDetector
+from .captions import captions_service, CaptionsService, CaptionStyle, CAPTION_THEMES
 
 # New AI-Video-Transcriber inspired services
 from .summarizer import summarizer_service, SummarizerService
@@ -37,6 +38,11 @@ __all__ = [
     "YouTubeService",
     "facecam_detector",
     "FacecamDetector",
+    # Captions service
+    "captions_service",
+    "CaptionsService",
+    "CaptionStyle",
+    "CAPTION_THEMES",
     # New AI-Video-Transcriber services
     "summarizer_service",
     "SummarizerService",

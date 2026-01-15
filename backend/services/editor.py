@@ -5,11 +5,17 @@ Handles trimming, resizing, and exporting clips using MoviePy and FFmpeg
 import logging
 import uuid
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 import subprocess
 import os
 
 logger = logging.getLogger(__name__)
+
+# Import CaptionStyle for type hints
+try:
+    from backend.services.captions import CaptionStyle, captions_service
+except ImportError:
+    from services.captions import CaptionStyle, captions_service
 
 class VideoEditorService:
     """Service for editing and exporting video clips"""
@@ -283,6 +289,50 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         logger.info(f"Added subtitles to: {output_path}")
         return output_path
+
+    def add_styled_captions(
+        self,
+        video_path: str | Path,
+        output_path: str | Path,
+        words: List[dict],
+        theme_id: str = "viral",
+        style: str = "karaoke",
+        words_per_line: int = 3,
+        time_offset: float = 0.0,
+    ) -> Path:
+        """
+        Burn beautiful styled captions onto a video using the CaptionsService
+        
+        Args:
+            video_path: Input video path
+            output_path: Output video path  
+            words: List of word dicts with 'text', 'start_time', 'end_time'
+            theme_id: Caption theme (viral, gradient_sunset, neon_pink, etc.)
+            style: Caption style (karaoke, gradient, bounce, viral)
+            words_per_line: Number of words per caption line
+            time_offset: Time offset to apply to subtitles
+            
+        Returns:
+            Path to output video with burned captions
+        """
+        video_path = Path(video_path)
+        output_path = Path(output_path)
+        
+        # Parse style
+        try:
+            caption_style = CaptionStyle(style.lower())
+        except ValueError:
+            caption_style = CaptionStyle.KARAOKE
+        
+        return captions_service.burn_captions_to_video(
+            video_path=video_path,
+            output_path=output_path,
+            words=words,
+            theme_id=theme_id,
+            style=caption_style,
+            words_per_line=words_per_line,
+            time_offset=time_offset,
+        )
 
     def _create_ass(self, subtitles: List[dict], output_path: Path):
         """Create an ASS subtitle file for viral word-by-word style"""
@@ -750,6 +800,112 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f.write(f"{i}\n")
                 f.write(f"{format_time(sub['start_time'])} --> {format_time(sub['end_time'])}\n")
                 f.write(f"{sub['text']}\n\n")
+
+    def process_viral_clip_with_styled_captions(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        start_time: float,
+        end_time: float,
+        words: List[dict],
+        facecam_region: Optional[dict] = None,
+        pip_position: str = "bottom-right",
+        pip_scale: float = 0.25,
+        fps: int = 60,
+        caption_theme: str = "viral",
+        caption_style: str = "karaoke",
+        words_per_line: int = 3,
+    ) -> Path:
+        """
+        Full pipeline with styled captions: Trim -> Layout -> Burn Styled Captions
+        
+        This is an enhanced version that uses the CaptionsService for beautiful
+        karaoke-style word highlighting and animated captions.
+        
+        Args:
+            input_path: Source video path
+            output_path: Output video path
+            start_time: Clip start time
+            end_time: Clip end time
+            words: Word-level timestamps from transcription
+            facecam_region: Optional facecam region for PiP
+            pip_position: PiP position (top-left, top-right, bottom-left, bottom-right)
+            pip_scale: PiP size relative to output
+            fps: Output framerate
+            caption_theme: Caption theme (viral, gradient_sunset, neon_pink, etc.)
+            caption_style: Caption style (karaoke, gradient, bounce, viral)
+            words_per_line: Words per caption line
+            
+        Returns:
+            Path to processed viral clip with styled captions
+        """
+        input_path = Path(input_path)
+        output_path = Path(output_path)
+        
+        temp_trim = output_path.with_name(f"temp_trim_{uuid.uuid4()}{input_path.suffix}")
+        temp_layout = output_path.with_name(f"temp_layout_{uuid.uuid4()}{input_path.suffix}")
+        
+        try:
+            # 1. Trim the clip
+            self.trim_clip(input_path, temp_trim, start_time, end_time)
+            
+            # 2. Apply layout (PiP or vertical resize)
+            if facecam_region:
+                self.apply_pip_layout(
+                    input_path=temp_trim,
+                    output_path=temp_layout,
+                    facecam_region=facecam_region,
+                    pip_position=pip_position,
+                    pip_scale=pip_scale,
+                    fps=fps
+                )
+            else:
+                self._resize_to_vertical(temp_trim, temp_layout, fps)
+            
+            # 3. Filter and adjust words for the clip timeframe
+            adjusted_words = []
+            for word in words:
+                word_start = word.get("start_time", 0)
+                word_end = word.get("end_time", 0)
+                
+                # Skip words outside the clip range
+                if word_end <= start_time or word_start >= end_time:
+                    continue
+                
+                # Adjust timing relative to clip start
+                new_start = max(0.0, word_start - start_time)
+                new_end = min(end_time - start_time, word_end - start_time)
+                
+                adjusted_words.append({
+                    "text": word.get("text", ""),
+                    "start_time": new_start,
+                    "end_time": new_end
+                })
+            
+            # 4. Burn styled captions
+            if adjusted_words:
+                self.add_styled_captions(
+                    video_path=temp_layout,
+                    output_path=output_path,
+                    words=adjusted_words,
+                    theme_id=caption_theme,
+                    style=caption_style,
+                    words_per_line=words_per_line,
+                )
+            else:
+                # No words, just copy
+                import shutil
+                shutil.copy(temp_layout, output_path)
+            
+            logger.info(f"Viral clip with styled captions saved to: {output_path}")
+            return output_path
+            
+        finally:
+            # Cleanup temp files
+            if temp_trim.exists():
+                temp_trim.unlink()
+            if temp_layout.exists():
+                temp_layout.unlink()
 
 
 # Singleton instance
