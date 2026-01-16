@@ -16,17 +16,14 @@ import {
   Loader2,
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-import { Button } from "./button";
-import { Badge } from "./badge";
 import { GlowingCard } from "./glowing-card";
-import { Progress } from "./progress";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+
 
 
 export interface Clip {

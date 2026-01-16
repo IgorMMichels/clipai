@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface JobData {
   id: string;
   filename: string;
@@ -235,7 +237,7 @@ export default function ClipsPage() {
             {job?.transcript && (
               <Button
                 onClick={() => {
-                  const blob = new Blob([job.transcript], { type: "text/plain" });
+                  const blob = new Blob([job.transcript || ''], { type: "text/plain" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
@@ -327,13 +329,13 @@ export default function ClipsPage() {
           <GlowingCard className="p-6" glowColor="purple">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Full Transcript</h3>
-              <Button
-                size="sm"
-                onClick={() => {
-                  const blob = new Blob([job.transcript], { type: "text/plain" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob([job.transcript || ''], { type: "text/plain" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
                   a.download = `${job.filename.replace(/\.[^/.]+$/, "")}_transcript.txt`;
                   a.click();
                   URL.revokeObjectURL(url);

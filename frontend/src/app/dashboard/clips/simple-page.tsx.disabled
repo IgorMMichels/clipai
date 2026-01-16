@@ -1,0 +1,244 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+interface JobData {
+  id: string;
+  clips: Clip[];
+}
+
+interface Clip {
+  id: string;
+  start_time: number;
+  end_time: number;
+  duration: number;
+  transcript: string;
+  score: number;
+  semantic_score?: number;
+  heuristic_score?: number;
+}
+
+export default function ClipsPage() {
+  const [jobId, setJobId] = useState<string>("");
+  const [job, setJob] = useState<JobData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedClips, setSelectedClips] = useState<string[]>([]);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("job");
+    if (id) {
+      setJobId(id);
+      fetchJobData(id);
+    }
+  }, []);
+
+  const fetchJobData = async (id: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/api/upload/job/${id}`);
+      if (!response.ok) throw new Error("Failed to fetch job data");
+
+      const data = await response.json();
+      setJob(data);
+    } catch (err) {
+      console.error("Failed to fetch job data:", err);
+      setError("Failed to load clips. Make sure backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleClip = (clipId: string) => {
+    setSelectedClips(prev =>
+      prev.includes(clipId)
+        ? prev.filter(id => id !== clipId)
+        : [...prev, clipId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (job) {
+      setSelectedClips(job.clips.map(c => c.id));
+    }
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedClips([]);
+  };
+
+  const handleExportSelected = async () => {
+    if (selectedClips.length === 0) {
+      alert("Please select at least one clip to export");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/clips/${jobId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clip_ids: selectedClips,
+          quality_preset: "tiktok",
+          add_captions: true,
+          caption_theme: "viral",
+          caption_style: "karaoke",
+          use_gpu: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Export failed");
+
+      const data = await response.json();
+      alert(`Successfully exported ${selectedClips.length} clips!`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Export failed. Please try again.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6 max-w-7xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Loading clips...</h1>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6 max-w-7xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-red-600">Error</h1>
+          <p className="text-gray-600">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="container mx-auto p-6 max-w-7xl">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">No Job Selected</h1>
+          <p className="text-gray-600">
+            Please select a job from the dashboard first.
+          </p>
+          <button
+            onClick={() => window.location.href = "/dashboard"}
+            className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6 max-w-7xl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">
+          Clips - {job?.filename || "Unknown Video"}
+        </h1>
+        <p className="text-gray-600">
+          {job.clips.length} clips found • {selectedClips.length} selected
+        </p>
+      </div>
+
+      <div className="flex gap-4 mb-6">
+        <button
+          onClick={handleSelectAll}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Select All
+        </button>
+        <button
+          onClick={handleDeselectAll}
+          className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+        >
+          Deselect All
+        </button>
+        <button
+          onClick={handleExportSelected}
+          disabled={selectedClips.length === 0}
+          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+          Export Selected ({selectedClips.length})
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {job?.clips.map((clip, index) => (
+          <div
+            key={clip.id}
+            onClick={() => handleToggleClip(clip.id)}
+            className={`
+              p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md
+              ${selectedClips.includes(clip.id)
+                ? "ring-2 ring-blue-500 bg-blue-50"
+                : "hover:ring-1 hover:ring-blue-300 hover:bg-gray-50"
+            `}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedClips.includes(clip.id)}
+                  onChange={() => handleToggleClip(clip.id)}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <div>
+                  <div className="font-semibold text-gray-900">
+                    Clip #{index + 1}
+                  </div>
+                  {clip.score >= 70 && (
+                    <span className="inline-block bg-green-500 text-white px-2 py-1 rounded text-sm">
+                      Score: {clip.score.toFixed(1)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-3 p-3 bg-gray-50 rounded-md">
+              <div className="flex items-center gap-2 mb-2">
+                <div>
+                  <span className="font-medium text-gray-700">
+                    {formatTime(clip.start_time)} - {formatTime(clip.end_time)}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-500">
+                  ({Math.round(clip.duration)}s)
+                </span>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700 line-clamp-3">
+              {clip.transcript}
+            </p>
+          </div>
+        </div>
+        ))}
+      </div>
+    </div>
+  </div>
+  );
+}
+
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
