@@ -9,8 +9,8 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
-from backend.services.captions import captions_service, CaptionStyle, CAPTION_THEMES
-from backend.services.transcriber import transcription_service
+from services.captions import captions_service, CaptionStyle, CAPTION_THEMES
+from services.transcriber import transcription_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/captions", tags=["captions"])

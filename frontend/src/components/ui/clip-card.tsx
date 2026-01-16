@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "./card";
+import { Button } from "./button";
+import { Badge } from "./badge";
+import { Progress } from "./progress";
 import {
   Play,
   Download,
-  Copy,
-  CheckCircle2,
-  Clock,
-  FileText,
-  MoreVertical,
+  Zap,
+  MonitorPlay,
+  Sparkles,
+  CheckCircle,
+  AlertCircle,
   Loader2,
-  TrendingUp,
-  Maximize2,
-  X,
 } from "lucide-react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 import { Button } from "./button";
 import { Badge } from "./badge";
 import { GlowingCard } from "./glowing-card";
@@ -162,7 +163,7 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
     setDownloadUrl(null);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/clips/${jobId}/export/${clip.id}`, {
+      const response = await fetch(`${API_URL}/api/clips/${jobId}/export/${clip.id}`, {
         method: "POST",
       });
 
@@ -172,7 +173,7 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
 
       const pollProgress = async () => {
         try {
-          const statusRes = await fetch(`http://localhost:8000/api/clips/export/${data.export_id}/status`);
+          const statusRes = await fetch(`${API_URL}/api/clips/export/${data.export_id}/status`);
           if (!statusRes.ok) return;
 
           const status = await statusRes.json();
@@ -205,7 +206,7 @@ export function ClipCard({ clip, index, jobId, onPreview, onLoadPreview }: ClipC
 
   const handleDownload = () => {
     if (downloadUrl) {
-      window.open(`http://localhost:8000${downloadUrl}`, "_blank");
+      window.open(`${API_URL}${downloadUrl}`, "_blank");
     }
   };
 

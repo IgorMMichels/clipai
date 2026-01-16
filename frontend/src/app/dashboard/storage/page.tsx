@@ -16,6 +16,8 @@ import {
   Loader2,
 } from "lucide-react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface FileInfo {
   name: string;
   path: string;
@@ -46,34 +48,7 @@ export default function StoragePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, uploadsRes, outputsRes] = await Promise.all([
-        fetch("http://localhost:8000/api/storage/summary"),
-        fetch("http://localhost:8000/api/storage/uploads"),
-        fetch("http://localhost:8000/api/storage/outputs"),
-      ]);
-
-      if (summaryRes.ok) setSummary(await summaryRes.json());
-      if (uploadsRes.ok) {
-        const data = await uploadsRes.json();
-        setUploads(data.uploads);
-      }
-      if (outputsRes.ok) {
-        const data = await outputsRes.json();
-        setOutputs(data.outputs);
-      }
-    } catch (err) {
-      console.error("Error fetching storage data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteUpload = async (filename: string) => {
-    if (!confirm(`Delete ${filename}?`)) return;
-    
-    setDeleting(filename);
-    try {
-      const res = await fetch(`http://localhost:8000/api/storage/uploads/${filename}`, {
+      const res = await fetch(`${API_URL}/api/storage/clear/${type}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -91,7 +66,7 @@ export default function StoragePage() {
     
     setDeleting(foldername);
     try {
-      const res = await fetch(`http://localhost:8000/api/storage/outputs/${foldername}`, {
+      const res = await fetch(`${API_URL}/api/storage/outputs/${foldername}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -112,10 +87,10 @@ export default function StoragePage() {
     };
     
     if (!confirm(messages[type])) return;
-    
+
     setDeleting(type);
     try {
-      const res = await fetch(`http://localhost:8000/api/storage/clear/${type}`, {
+      const res = await fetch(`${API_URL}/api/storage/clear/${type}`, {
         method: "DELETE",
       });
       if (res.ok) {

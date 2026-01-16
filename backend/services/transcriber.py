@@ -116,13 +116,22 @@ class TranscriptionService:
         progress_callback: Optional[Callable] = None
     ) -> dict:
         """Transcribe using Faster-Whisper with optimized parameters"""
-        import torch
         import gc
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        compute_type = "float16" if torch.cuda.is_available() else "int8"
-        
-        logger.info(f"Using device: {device}, compute_type: {compute_type}")
+        # Try to detect CUDA availability with graceful fallback
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            compute_type = "float16" if torch.cuda.is_available() else "int8"
+            logger.info(f"Using device: {device}, compute_type: {compute_type}")
+        except ImportError:
+            logger.warning("torch not available, using CPU with int8")
+            device = "cpu"
+            compute_type = "int8"
+        except Exception as e:
+            logger.warning(f"Error detecting CUDA: {e}, using CPU with int8")
+            device = "cpu"
+            compute_type = "int8"
         
         try:
             # Load model
@@ -211,7 +220,11 @@ class TranscriptionService:
             # Clean up GPU memory
             gc.collect()
             if device == "cuda":
-                torch.cuda.empty_cache()
+                try:
+                    import torch
+                    torch.cuda.empty_cache()
+                except:
+                    pass
     
     def _optimize_with_ai(self, text: str, language: str) -> Optional[str]:
         """

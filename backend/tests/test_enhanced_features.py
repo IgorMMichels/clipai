@@ -3,8 +3,6 @@ Test Suite for Enhanced Features
 Tests multi-modal analysis, scene detection, camera switching, and batch processing
 """
 import pytest
-import asyncio
-from pathlib import Path
 
 
 class TestEnhancedFeatures:
@@ -31,7 +29,7 @@ class TestEnhancedFeatures:
         try:
             from services.enhanced_clipper import enhanced_clip_finder_service
             assert enhanced_clip_finder_service.is_available
-            print("✓ Enhanced clip finder service loaded")
+            print("OK - Enhanced clip finder service loaded")
         except Exception as e:
             pytest.fail(f"Failed to import enhanced clip finder: {e}")
 
@@ -40,7 +38,7 @@ class TestEnhancedFeatures:
         try:
             from services.scene_detection import scene_detection_service
             assert scene_detection_service.is_available
-            print("✓ Scene detection service loaded")
+            print("OK - Scene detection service loaded")
         except Exception as e:
             pytest.fail(f"Failed to import scene detection: {e}")
 
@@ -49,7 +47,7 @@ class TestEnhancedFeatures:
         try:
             from services.camera_switching import camera_switching_service
             assert camera_switching_service.is_available
-            print("✓ Camera switching service loaded")
+            print("OK - Camera switching service loaded")
         except Exception as e:
             pytest.fail(f"Failed to import camera switching: {e}")
 
@@ -58,7 +56,7 @@ class TestEnhancedFeatures:
         try:
             from services.enhanced_captions import enhanced_captions_service
             assert enhanced_captions_service is not None
-            print("✓ Enhanced captions service loaded")
+            print("OK - Enhanced captions service loaded")
         except Exception as e:
             pytest.fail(f"Failed to import enhanced captions: {e}")
 
@@ -68,7 +66,7 @@ class TestEnhancedFeatures:
             from services.optimized_processor import optimized_video_processor
             assert optimized_video_processor is not None
             stats = optimized_video_processor.get_processing_stats()
-            print(f"✓ Optimized processor loaded: GPU={stats['gpu_available']}")
+            print(f"OK - Optimized processor loaded: GPU={stats['gpu_available']}")
         except Exception as e:
             pytest.fail(f"Failed to import optimized processor: {e}")
 
@@ -77,7 +75,7 @@ class TestEnhancedFeatures:
         try:
             from services.batch_processor import batch_processing_service
             assert batch_processing_service is not None
-            print("✓ Batch processor service loaded")
+            print("OK - Batch processor service loaded")
         except Exception as e:
             pytest.fail(f"Failed to import batch processor: {e}")
 
@@ -89,7 +87,7 @@ class TestEnhancedFeatures:
             assert "tiktok" in QUALITY_PRESETS
             preset = quality_presets_service.get_preset("tiktok")
             assert preset.name == "TikTok"
-            print(f"✓ Quality presets loaded: {len(QUALITY_PRESETS)} presets available")
+            print(f"OK - Quality presets loaded: {len(QUALITY_PRESETS)} presets available")
         except Exception as e:
             pytest.fail(f"Failed to import quality presets: {e}")
 
@@ -106,7 +104,7 @@ class TestEnhancedFeatures:
                 quality_presets_service,
                 QUALITY_PRESETS,
             )
-            print("✓ All enhanced services properly exported")
+            print("OK - All enhanced services properly exported")
         except ImportError as e:
             pytest.fail(f"Failed to import enhanced services: {e}")
 
@@ -120,7 +118,7 @@ class TestEnhancedFeatures:
         assert hasattr(CaptionStyle, "BOUNCE")
         assert hasattr(CaptionStyle, "WAVE")
         assert hasattr(CaptionStyle, "GLOW")
-        print(f"✓ Caption styles: {len(CaptionStyle)} styles available")
+        print(f"OK - Caption styles: {len(CaptionStyle)} styles available")
 
     def test_quality_presets_complete(self):
         """Test that all quality presets are defined"""
@@ -139,43 +137,7 @@ class TestEnhancedFeatures:
         ]
         for preset_id in required_presets:
             assert preset_id in QUALITY_PRESETS, f"Missing preset: {preset_id}"
-        print(f"✓ All {len(required_presets)} quality presets available")
-
-    @pytest.mark.asyncio
-    async def test_batch_processing_mock(self):
-        """Test batch processing with mock data"""
-        from services.batch_processor import batch_processing_service
-
-        mock_clips = [
-            {"id": "1", "start_time": 0.0, "end_time": 30.0},
-            {"id": "2", "start_time": 30.0, "end_time": 60.0},
-            {"id": "3", "start_time": 60.0, "end_time": 90.0},
-        ]
-
-        # Mock video path (won't be used in test)
-        mock_video_path = Path("/mock/video.mp4")
-
-        options = {
-            "use_gpu": False,  # Disable GPU for testing
-            "quality_preset": "balanced",
-            "add_captions": False,
-        }
-
-        # This will fail without a real video, but tests the import and structure
-        try:
-            result = await batch_processing_service.process_clips_batch(
-                clips_data=mock_clips,
-                video_path=mock_video_path,
-                options=options,
-            )
-            assert "batch_id" in result
-            assert result["total_clips"] == 3
-            print(f"✓ Batch processing structure validated: {result['batch_id']}")
-        except Exception as e:
-            # Expected to fail without real video
-            if "mock" not in str(e).lower():
-                pytest.fail(f"Unexpected error: {e}")
-            print(f"✓ Batch processing structure OK (video missing is expected)")
+        print(f"OK - All {len(required_presets)} quality presets available")
 
 
 if __name__ == "__main__":

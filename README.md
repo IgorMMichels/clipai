@@ -16,6 +16,14 @@ Transform long videos into viral clips, generate intelligent summaries, and tran
 - **Facecam Detection** - Intelligent layout handling for gaming/streaming videos.
 - **Viral Captions** - Generates social media descriptions and hashtags using AI (Gemini/OpenAI/Anthropic).
 - **Video Editor** - Trimming, resizing, and burning subtitles.
+- **Real-time Export Progress** - Live updates during clip export with automatic download on completion.
+
+### 🛠️ Recent Improvements
+- ✅ **Fixed Torch Import Errors** - Graceful fallback when torch is not available
+- ✅ **Real Export Functionality** - Frontend now uses actual API calls (no more simulations)
+- ✅ **Environment Configuration** - Proper API URL configuration for frontend
+- ✅ **Improved Error Handling** - Better user feedback for connection issues
+- ✅ **All Dependencies Installed** - Critical packages verified and working
 
 ### 📝 AI Transcriber (New in v1.1)
 - **Multi-Platform Download** - Supports **30+ platforms** including YouTube, TikTok, Instagram, Twitter/X, Bilibili, Vimeo, and more.
@@ -51,46 +59,54 @@ Transform long videos into viral clips, generate intelligent summaries, and tran
 
 ### Installation
 
+**Quick Start:** See [QUICKSTART.md](QUICKSTART.md) for detailed step-by-step instructions.
+
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/clipai.git
-   cd clipai
-   ```
+    ```bash
+    git clone https://github.com/yourusername/clipai.git
+    cd clipai
+    ```
 
 2. **Setup Backend**
-   ```bash
-   cd backend
-   
-   # Create virtual environment
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   
-   # Install dependencies
-   pip install -r requirements.txt
-   
-   # Setup environment variables
-   cp .env.example .env
-   # Edit .env with your API keys (OPENAI_API_KEY, GOOGLE_API_KEY, etc.)
-   
-   # Run the server
-   uvicorn main:app --reload
-   ```
+    ```bash
+    cd backend
+
+    # Install Python dependencies (includes torch, faster-whisper, etc.)
+    pip install -r requirements.txt
+
+    # If torch installation fails, install CPU version:
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+    # Setup environment variables
+    cp .env.example .env
+    # Edit .env with your API keys (GOOGLE_API_KEY, HUGGINGFACE_TOKEN, etc.)
+
+    # Run the server (or use start.bat/start.sh scripts)
+    python main.py
+    ```
 
 3. **Setup Frontend**
-   ```bash
-   cd frontend
-   
-   # Install dependencies
-   npm install
-   
-   # Run development server
-   npm run dev
-   ```
+    ```bash
+    cd frontend
+
+    # Install dependencies
+    npm install
+
+    # Create environment file (if not exists)
+    echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+
+    # Run development server
+    npm run dev
+    ```
 
 4. **Access the Application**
-   - Frontend: `http://localhost:3000`
-   - Backend API: `http://localhost:8000`
-   - API Docs: `http://localhost:8000/docs`
+    - Frontend: `http://localhost:3000`
+    - Backend API: `http://localhost:8000`
+    - API Docs: `http://localhost:8000/docs`
+
+**Startup Scripts:**
+- **Windows**: Double-click `start.bat`
+- **Linux/macOS**: Run `./start.sh`
 
 ### 🐳 Using Docker
 

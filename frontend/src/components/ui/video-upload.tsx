@@ -21,6 +21,8 @@ import { Badge } from "./badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { LiveTranscription } from "./live-transcription";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface UploadedFile {
   file: File | { name: string; size: number };
   id: string;
@@ -95,7 +97,7 @@ export function VideoUpload({ onUploadComplete, settings }: VideoUploadProps) {
         );
       }, 200);
 
-      const response = await fetch("http://localhost:8000/api/upload/", {
+      const response = await fetch(`${API_URL}/api/upload/`, {
         method: "POST",
         body: formData,
       });
@@ -161,7 +163,7 @@ export function VideoUpload({ onUploadComplete, settings }: VideoUploadProps) {
     try {
       const { w, h } = getAspectRatio(settings?.aspectRatio);
       
-      const response = await fetch("http://localhost:8000/api/upload/youtube", {
+      const response = await fetch(`${API_URL}/api/upload/youtube`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -212,7 +214,7 @@ export function VideoUpload({ onUploadComplete, settings }: VideoUploadProps) {
   const pollJobStatus = async (fileId: string, jobId: string) => {
     const poll = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/upload/status/${jobId}`);
+        const response = await fetch(`${API_URL}/api/upload/status/${jobId}`);
         const data = await response.json();
 
         setFiles((prev) =>

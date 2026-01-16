@@ -78,7 +78,7 @@ export default function ClipsPage() {
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:8000/api/upload/job/${id}`);
+      const response = await fetch(`${API_URL}/api/upload/job/${id}`);
       if (!response.ok) throw new Error("Failed to fetch job");
       const data = await response.json();
       setJob(data);
@@ -98,7 +98,7 @@ export default function ClipsPage() {
     if (!job) return;
     try {
         // Request preview generation with PiP but NO subtitles
-        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
+        const response = await fetch(`${API_URL}/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
@@ -107,7 +107,7 @@ export default function ClipsPage() {
 
         const data = await response.json();
         if (data.url) {
-            setPreviewUrl(`http://localhost:8000${data.url}`);
+            setPreviewUrl(`${API_URL}${data.url}`);
             setActiveClipId(clipId);
             setPreviewOpen(true);
         }
@@ -120,7 +120,7 @@ export default function ClipsPage() {
   const handleLoadPreview = async (clipId: string): Promise<string | null> => {
     if (!job) return null;
     try {
-        const response = await fetch(`http://localhost:8000/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
+        const response = await fetch(`${API_URL}/api/clips/${job.id}/preview/${clipId}?with_subtitles=false&with_pip=${job.facecam_region ? 'true' : 'false'}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
@@ -129,7 +129,7 @@ export default function ClipsPage() {
 
         const data = await response.json();
         if (data.url) {
-            return `http://localhost:8000${data.url}`;
+            return `${API_URL}${data.url}`;
         }
         return null;
     } catch (err) {
@@ -147,7 +147,7 @@ export default function ClipsPage() {
     score: c.score,
     description: c.description,
     hashtags: c.hashtags,
-    thumbnailUrl: `http://localhost:8000/api/clips/${job.id}/thumbnail/${c.id}`,
+    thumbnailUrl: `${API_URL}/api/clips/${job.id}/thumbnail/${c.id}`,
     words: c.words,
   })) || [];
 

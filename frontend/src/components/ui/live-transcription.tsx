@@ -40,7 +40,7 @@ export function LiveTranscription({ jobId, onComplete }: LiveTranscriptionProps)
   useEffect(() => {
     if (!jobId) return;
 
-    const eventSource = new EventSource(`http://localhost:8000/api/upload/stream/${jobId}`);
+    const eventSource = new EventSource(`${API_URL}/api/upload/stream/${jobId}`);
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {

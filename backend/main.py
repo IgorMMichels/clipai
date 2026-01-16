@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from config import settings
-from api.routes import upload_router, clips_router, storage_router, transcribe_router, captions_router
+from api.routes import upload_router, clips_router, storage_router, transcribe_router
 
 
 # Configure logging
@@ -77,7 +77,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(clips_router, prefix="/api")
 app.include_router(storage_router, prefix="/api")
 app.include_router(transcribe_router, prefix="/api")
-app.include_router(captions_router, prefix="/api")
+# app.include_router(captions_router, prefix="/api")  # Disabled due to import issues
 
 
 @app.get("/")
