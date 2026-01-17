@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { GlowingCard } from "@/components/ui/glowing-card";
 import { Button } from "@/components/ui/button";
@@ -30,19 +30,23 @@ export default function SettingsPage() {
   });
 
   // Load settings from localStorage on mount
-  useState(() => {
-    const savedSettings = localStorage.getItem("clipai_settings");
-    if (savedSettings) {
-      try {
-        setSettings(JSON.parse(savedSettings));
-      } catch (e) {
-        console.error("Failed to load settings:", e);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedSettings = localStorage.getItem("clipai_settings");
+      if (savedSettings) {
+        try {
+          setSettings(JSON.parse(savedSettings));
+        } catch (e) {
+          console.error("Failed to load settings:", e);
+        }
       }
     }
-  });
+  }, []);
 
   const handleSave = () => {
-    localStorage.setItem("clipai_settings", JSON.stringify(settings));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("clipai_settings", JSON.stringify(settings));
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

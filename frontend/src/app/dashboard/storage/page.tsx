@@ -48,7 +48,39 @@ export default function StoragePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/storage/clear/${type}`, {
+      // Fetch storage summary
+      const summaryRes = await fetch(`${API_URL}/api/storage/summary`);
+      if (summaryRes.ok) {
+        const summaryData = await summaryRes.json();
+        setSummary(summaryData);
+      }
+
+      // Fetch uploads list
+      const uploadsRes = await fetch(`${API_URL}/api/storage/uploads`);
+      if (uploadsRes.ok) {
+        const uploadsData = await uploadsRes.json();
+        setUploads(uploadsData.files || []);
+      }
+
+      // Fetch outputs list
+      const outputsRes = await fetch(`${API_URL}/api/storage/outputs`);
+      if (outputsRes.ok) {
+        const outputsData = await outputsRes.json();
+        setOutputs(outputsData.folders || []);
+      }
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteUpload = async (filename: string) => {
+    if (!confirm(`Delete ${filename}?`)) return;
+
+    setDeleting(filename);
+    try {
+      const res = await fetch(`${API_URL}/api/storage/uploads/${filename}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -63,7 +95,7 @@ export default function StoragePage() {
 
   const deleteOutput = async (foldername: string) => {
     if (!confirm(`Delete ${foldername} and all its clips?`)) return;
-    
+
     setDeleting(foldername);
     try {
       const res = await fetch(`${API_URL}/api/storage/outputs/${foldername}`, {

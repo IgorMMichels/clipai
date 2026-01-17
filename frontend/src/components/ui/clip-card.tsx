@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { Button } from "./button";
 import { Badge } from "./badge";
@@ -14,6 +16,14 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
+  TrendingUp,
+  Clock,
+  MoreVertical,
+  Copy,
+  FileText,
+  Maximize2,
+  CheckCircle2,
+  X,
 } from "lucide-react";
 
 import { GlowingCard } from "./glowing-card";
@@ -24,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "./dropdown-menu";
 
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export interface Clip {
   id: string;

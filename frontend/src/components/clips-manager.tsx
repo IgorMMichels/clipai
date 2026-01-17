@@ -307,7 +307,7 @@ export default function ClipsManager() {
               </Label>
               <Select
                 value={exportOptions.quality_preset}
-                onValueChange={(value) => setExportOptions({ ...exportOptions, quality_preset: value })}
+                onValueChange={(value: string) => setExportOptions({ ...exportOptions, quality_preset: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -335,7 +335,7 @@ export default function ClipsManager() {
               </Label>
               <Select
                 value={exportOptions.caption_theme}
-                onValueChange={(value) => setExportOptions({ ...exportOptions, caption_theme: value })}
+                onValueChange={(value: string) => setExportOptions({ ...exportOptions, caption_theme: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -363,7 +363,7 @@ export default function ClipsManager() {
               </Label>
               <Select
                 value={exportOptions.caption_style}
-                onValueChange={(value) => setExportOptions({ ...exportOptions, caption_style: value })}
+                onValueChange={(value: string) => setExportOptions({ ...exportOptions, caption_style: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -389,7 +389,7 @@ export default function ClipsManager() {
               <div className="flex items-center gap-2">
                 <Switch
                   checked={exportOptions.use_gpu}
-                  onCheckedChange={(checked) => setExportOptions({ ...exportOptions, use_gpu: checked })}
+                  onCheckedChange={(checked: boolean) => setExportOptions({ ...exportOptions, use_gpu: checked })}
                 />
                 <span className="text-sm text-gray-600">
                   {exportOptions.use_gpu ? "Enabled" : "Disabled"}
@@ -405,7 +405,7 @@ export default function ClipsManager() {
               <div className="flex items-center gap-2">
                 <Switch
                   checked={exportOptions.use_scene_detection}
-                  onCheckedChange={(checked) => setExportOptions({ ...exportOptions, use_scene_detection: checked })}
+                  onCheckedChange={(checked: boolean) => setExportOptions({ ...exportOptions, use_scene_detection: checked })}
                 />
                 <span className="text-sm text-gray-600">
                   {exportOptions.use_scene_detection ? "Enabled" : "Disabled"}
@@ -421,7 +421,7 @@ export default function ClipsManager() {
               <div className="flex items-center gap-2">
                 <Switch
                   checked={exportOptions.use_camera_switching}
-                  onCheckedChange={(checked) => setExportOptions({ ...exportOptions, use_camera_switching: checked })}
+                  onCheckedChange={(checked: boolean) => setExportOptions({ ...exportOptions, use_camera_switching: checked })}
                 />
                 <span className="text-sm text-gray-600">
                   {exportOptions.use_camera_switching ? "Enabled" : "Disabled"}
@@ -437,7 +437,7 @@ export default function ClipsManager() {
             <div className="flex items-center gap-2">
               <Switch
                 checked={exportOptions.add_captions}
-                onCheckedChange={(checked) => setExportOptions({ ...exportOptions, add_captions: checked })}
+                onCheckedChange={(checked: boolean) => setExportOptions({ ...exportOptions, add_captions: checked })}
               />
               <span className="text-sm font-medium">Add Styled Captions</span>
             </div>

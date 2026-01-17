@@ -16,6 +16,8 @@ import {
 import { Badge } from "./badge";
 import { Progress } from "./progress";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 interface LiveTranscriptionProps {
   jobId: string | null;
   onComplete?: (transcript: string) => void;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { ClipsGrid, Clip } from "@/components/ui/clip-card";
@@ -55,7 +55,7 @@ interface JobData {
 
 import { PreviewModal } from "@/components/preview-modal";
 
-export default function ClipsPage() {
+function ClipsPageContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get("job");
   
@@ -361,5 +361,17 @@ export default function ClipsPage() {
         title={activeClipId ? `Clip ${clips.findIndex(c => c.id === activeClipId) + 1}` : undefined}
       />
     </div>
+  );
+}
+
+export default function ClipsPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6 lg:p-8 flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <ClipsPageContent />
+    </Suspense>
   );
 }
